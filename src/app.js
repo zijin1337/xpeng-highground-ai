@@ -69,6 +69,7 @@ const ids = [
   "water", "water-line", "water-label", "scene-status-dot", "scene-status-text", "scene-desc",
   "play-migration-button", "animation-step", "animation-speed", "animation-progress",
   "animation-percent", "migration-route",
+  "api-key-input", "api-connect-button", "api-status", "api-status-dot", "command-button",
 ];
 
 const el = Object.fromEntries(ids.map((id) => [id, document.getElementById(id)]));
@@ -79,6 +80,9 @@ let animationFrameId = null;
 let animationRunId = 0;
 let isAnimating = false;
 let vehicleAtHighPoint = false;
+let apiMode = false;
+let apiKey = "";
+let currentServerEventId = null;
 
 function setCheckbox(element, checked) {
   element.checked = Boolean(checked);
@@ -236,9 +240,7 @@ function updatePipeline(result) {
   });
 }
 
-function runDecision() {
-  updateOutputs();
-  const result = evaluateDecision(currentInputs());
+function renderDecision(result, metadata = {}) {
   eventCounter += 1;
   document.body.dataset.tone = result.tone;
   el["decision-value"].textContent = result.label;
@@ -248,16 +250,24 @@ function runDecision() {
   el["latest-start-value"].textContent = formatMinutes(result.timing.latestSafeStartMin);
   el["threshold-value"].textContent = `距禁行水位 ${Math.max(0, result.timing.remainingCm).toFixed(1)} cm`;
   el["decision-reason"].textContent = result.reason;
-  el["event-id"].textContent = `EVENT-${String(eventCounter).padStart(4, "0")}`;
-  el["snapshot-hash"].textContent = snapshotHash(result.inputs);
+  el["event-id"].textContent = metadata.eventId ?? `EVENT-${String(eventCounter).padStart(4, "0")}`;
+  el["snapshot-hash"].textContent = metadata.inputHash ?? snapshotHash(result.inputs);
   el["action-permission"].textContent = result.permission;
-  el["event-time"].dateTime = new Date().toISOString();
-  el["event-time"].textContent = new Date().toLocaleString("zh-CN", { hour12: false });
+  const eventDate = metadata.receivedAt ? new Date(metadata.receivedAt) : new Date();
+  el["event-time"].dateTime = eventDate.toISOString();
+  el["event-time"].textContent = eventDate.toLocaleString("zh-CN", { hour12: false });
   renderEvidence(result);
   updateScene(result);
   updatePipeline(result);
   currentResult = result;
+  currentServerEventId = metadata.eventId ?? null;
+  updateCommandAvailability();
   return result;
+}
+
+function runDecision() {
+  updateOutputs();
+  return renderDecision(evaluateDecision(currentInputs()));
 }
 
 function stepOneMinute() {
@@ -384,21 +394,250 @@ function playMigrationDemo() {
   animationFrameId = requestAnimationFrame(frame);
 }
 
+function setApiStatus(state, text) {
+  const container = el["api-status"].closest(".api-state");
+  container.dataset.state = state;
+  el["api-status"].textContent = text;
+}
+
+function updateCommandAvailability() {
+  const eligible = apiMode
+    && Boolean(currentServerEventId)
+    && currentResult?.decision === DECISIONS.MIGRATE_NOW
+    && el["owner-authorized"].checked;
+  el["command-button"].disabled = !eligible;
+  if (eligible) {
+    el["command-button"].textContent = "验证一次性授权并记录命令";
+  } else if (!currentServerEventId) {
+    el["command-button"].textContent = "先提交可迁移遥测";
+  } else if (!el["owner-authorized"].checked) {
+    el["command-button"].textContent = "勾选车主单次授权";
+  } else {
+    el["command-button"].textContent = "当前事件禁止迁移";
+  }
+}
+
+async function connectApi() {
+  const candidate = el["api-key-input"].value.trim();
+  if (!candidate) {
+    setApiStatus("error", "请输入 X-API-Key");
+    return;
+  }
+  el["api-connect-button"].disabled = true;
+  setApiStatus("", "正在连接后端…");
+  try {
+    const response = await fetch("/api/v1/session", {
+      headers: { "X-API-Key": candidate },
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const session = await response.json();
+    apiMode = true;
+    apiKey = candidate;
+    currentServerEventId = null;
+    sessionStorage.setItem("highground-api-key", candidate);
+    const storageLabel = session.storage === "sqlite" ? "SQLite" : session.storage;
+    setApiStatus("connected", `API 已连接 · ${storageLabel}`);
+    el["api-connect-button"].textContent = "重新连接";
+    updateCommandAvailability();
+  } catch (error) {
+    apiMode = false;
+    apiKey = "";
+    currentServerEventId = null;
+    setApiStatus("error", `后端连接失败 · ${error.message}`);
+    updateCommandAvailability();
+  } finally {
+    el["api-connect-button"].disabled = false;
+  }
+}
+
+async function recordMigrationCommand() {
+  if (!apiMode || !currentServerEventId || !el["owner-authorized"].checked) {
+    updateCommandAvailability();
+    return;
+  }
+
+  const eventId = currentServerEventId;
+  el["command-button"].disabled = true;
+  setApiStatus("", "正在签发单次授权并重新校验…");
+  try {
+    const authorizationResponse = await fetch("/api/v1/authorizations", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-API-Key": apiKey,
+      },
+      body: JSON.stringify({ event_id: eventId, owner_id: "owner-web-console" }),
+    });
+    if (!authorizationResponse.ok) {
+      const detail = await authorizationResponse.text();
+      throw new Error(`授权 HTTP ${authorizationResponse.status}: ${detail.slice(0, 120)}`);
+    }
+    const authorization = await authorizationResponse.json();
+
+    const commandResponse = await fetch("/api/v1/commands/migrate", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-API-Key": apiKey,
+      },
+      body: JSON.stringify({
+        event_id: eventId,
+        authorization_token: authorization.authorization_token,
+      }),
+    });
+    if (!commandResponse.ok) {
+      const detail = await commandResponse.text();
+      throw new Error(`命令 HTTP ${commandResponse.status}: ${detail.slice(0, 120)}`);
+    }
+    const command = await commandResponse.json();
+    currentServerEventId = null;
+    el["action-permission"].textContent = command.status;
+    el["command-button"].textContent = `已留痕 ${command.command_id.slice(-8)}`;
+    setApiStatus("connected", "命令已真实写入 SQLite · 未发送车辆");
+  } catch (error) {
+    setApiStatus("error", `命令处理失败 · ${error.message}`);
+    updateCommandAvailability();
+  }
+}
+
+function telemetryPayload(inputs) {
+  const messageSuffix = typeof crypto.randomUUID === "function"
+    ? crypto.randomUUID().replaceAll("-", "")
+    : `${Date.now()}${Math.floor(Math.random() * 1_000_000)}`;
+  return {
+    message_id: `msg_web_${messageSuffix}`,
+    site_id: "garage-web-01",
+    vehicle_id: "vehicle-web-01",
+    source_id: "browser-console-01",
+    captured_at: new Date().toISOString(),
+    environment: {
+      rainfall_mm_h: inputs.rainfallMmH,
+      water_level_cm: inputs.waterLevelCm,
+      secondary_water_level_cm: inputs.secondaryWaterLevelCm,
+      rise_rate_cm_min: inputs.riseRateCmMin,
+      sensor_confidence: inputs.sensorConfidence,
+    },
+    vehicle: {
+      occupants_clear: inputs.occupantsClear,
+      charging_disconnected: inputs.chargingDisconnected,
+      vehicle_healthy: inputs.vehicleHealthy,
+      positioning_online: inputs.positioningOnline,
+      network_online: inputs.networkOnline,
+      emergency_operator_online: inputs.emergencyOperatorOnline,
+      water_contact_triggered: inputs.waterContactTriggered,
+      motion_state: inputs.motionState,
+    },
+    site: {
+      route_dry: inputs.routeDry,
+      route_blocked: inputs.routeBlocked,
+    },
+  };
+}
+
+function serverTone(decision) {
+  if (["NO_GO", "EMERGENCY_STOP", "MIGRATE_NOW"].includes(decision)) return "danger";
+  if (["WATCH", "PREPARE", "VERIFY_ONLY"].includes(decision)) return "warning";
+  return "safe";
+}
+
+function serverResultToView(server, inputs) {
+  const local = evaluateDecision(inputs);
+  const gates = server.safety_gates.map((gate) => ({
+    id: gate.id,
+    label: gate.label,
+    ok: gate.passed,
+    detail: gate.detail,
+  }));
+  return {
+    ...local,
+    decision: server.decision,
+    label: server.label,
+    tone: serverTone(server.decision),
+    riskLevel: server.risk_level,
+    permission: server.permission,
+    authorizedToMove: server.authorized_to_move,
+    reason: server.reason,
+    timing: {
+      remainingCm: server.timing.remaining_cm,
+      timeToThresholdMin: server.timing.time_to_threshold_min ?? Number.POSITIVE_INFINITY,
+      routeTimeMin: server.timing.route_time_min,
+      queueTimeMin: server.timing.queue_time_min,
+      latestSafeStartMin: server.timing.latest_safe_start_min ?? Number.POSITIVE_INFINITY,
+    },
+    safety: {
+      gates,
+      allPassed: gates.every((gate) => gate.ok),
+      failed: gates.filter((gate) => !gate.ok),
+    },
+  };
+}
+
+async function runApiDecision() {
+  updateOutputs();
+  const inputs = currentInputs();
+  el["run-button"].disabled = true;
+  setApiStatus("", "正在写入遥测…");
+  try {
+    const response = await fetch("/api/v1/telemetry", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-API-Key": apiKey,
+      },
+      body: JSON.stringify(telemetryPayload(inputs)),
+    });
+    if (!response.ok) {
+      const detail = await response.text();
+      throw new Error(`HTTP ${response.status}: ${detail.slice(0, 120)}`);
+    }
+    const payload = await response.json();
+    const result = serverResultToView(payload.result, inputs);
+    setApiStatus("connected", "API 已连接 · 遥测已写入 SQLite");
+    return renderDecision(result, {
+      eventId: payload.event_id,
+      inputHash: `SHA256-${payload.input_sha256.slice(0, 16).toUpperCase()}`,
+      receivedAt: payload.received_at,
+    });
+  } catch (error) {
+    setApiStatus("error", `遥测提交失败 · ${error.message}`);
+    throw error;
+  } finally {
+    el["run-button"].disabled = false;
+  }
+}
+
 el.scenario.addEventListener("change", () => applyScenario(el.scenario.value));
-el["run-button"].addEventListener("click", () => {
+el["run-button"].addEventListener("click", async () => {
   cancelMigrationAnimation({ resetVehicle: true });
-  runDecision();
+  if (apiMode) {
+    try {
+      await runApiDecision();
+    } catch {
+      // The visible API status carries the actionable error; do not silently fall back.
+    }
+  } else {
+    runDecision();
+  }
 });
 el["step-button"].addEventListener("click", stepOneMinute);
 el["reset-button"].addEventListener("click", () => applyScenario(el.scenario.value));
 el["play-migration-button"].addEventListener("click", playMigrationDemo);
+el["api-connect-button"].addEventListener("click", connectApi);
+el["command-button"].addEventListener("click", recordMigrationCommand);
 
 for (const input of document.querySelectorAll("#control-form input")) {
   input.addEventListener("input", () => {
     cancelMigrationAnimation({ resetVehicle: true });
     updateOutputs();
+    if (input.id === "owner-authorized" && apiMode && currentServerEventId) {
+      updateCommandAvailability();
+      return;
+    }
     runDecision();
+    if (apiMode) setApiStatus("connected", "API 已连接 · 参数待提交");
   });
 }
 
+const savedApiKey = sessionStorage.getItem("highground-api-key");
+if (savedApiKey) el["api-key-input"].value = savedApiKey;
 applyScenario("normal");

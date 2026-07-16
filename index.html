@@ -3,9 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="小鹏高地 AI：暴雨内涝场景下，从风险预警到安全位移的物理 AI 概念验证。">
+  <meta name="description" content="高地 AI：接收真实 HTTP 遥测、持久化证据并生成车辆安全位移 Go / No-Go 的可运行 MVP。">
   <meta name="theme-color" content="#081826">
-  <title>高地 AI · 车辆安全位移仿真</title>
+  <title>高地 AI · 车辆安全位移决策服务</title>
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
@@ -21,7 +21,7 @@
     </div>
     <div class="header-note">
       <span class="live-dot" aria-hidden="true"></span>
-      概念验证 · 不连接真实车辆
+      可运行 MVP · API + SQLite
     </div>
   </header>
 
@@ -30,7 +30,7 @@
       <div>
         <p class="section-kicker">从“收到预警”到“安全上高地”</p>
         <h2 id="intro-title">让 AI 在水到之前完成判断，<br>让车辆只在安全窗口内行动。</h2>
-        <p>调整降雨、水位与安全闸，观察系统如何从多源感知生成可解释的 Go / No-Go 结果。</p>
+        <p>连接后端后，遥测会通过真实 HTTP 接口写入 SQLite，并生成可追溯的 Go / No-Go 事件；场景图仅用于解释结果。</p>
       </div>
       <div class="scenario-actions" aria-label="场景控制">
         <label for="scenario">场景预设</label>
@@ -44,6 +44,16 @@
         </select>
         <button id="run-button" class="button button-primary" type="button">运行决策</button>
         <button id="step-button" class="button" type="button">推进 1 分钟</button>
+        <div class="api-connection">
+          <div class="api-state">
+            <span id="api-status-dot" aria-hidden="true"></span>
+            <strong id="api-status">本地决策模式</strong>
+          </div>
+          <label class="sr-only" for="api-key-input">后端 X-API-Key</label>
+          <input id="api-key-input" type="password" autocomplete="off" placeholder="输入后端 X-API-Key">
+          <button id="api-connect-button" class="button" type="button">连接真实后端</button>
+          <p class="api-note">未连接时为本地演示；连接后“运行决策”会真实写库。</p>
+        </div>
       </div>
     </section>
 
@@ -68,14 +78,18 @@
     <section class="simulator" aria-labelledby="simulator-title">
       <div class="section-heading">
         <div>
-          <p class="section-kicker">车 · 场 · 云闭环</p>
-          <h2 id="simulator-title">地下车库数字孪生</h2>
+          <p class="section-kicker">车 · 场 · 云证据闭环</p>
+          <h2 id="simulator-title">实时决策与场景解释</h2>
         </div>
         <div class="scene-toolbar">
           <p id="decision-reason" class="decision-reason" role="status" aria-live="polite"></p>
           <button id="play-migration-button" class="button animation-button" type="button">
             <span aria-hidden="true">▶</span> 播放车辆迁移动画
           </button>
+          <button id="command-button" class="button command-button" type="button" disabled>
+            验证一次性授权并记录命令
+          </button>
+          <small class="command-note">该按钮调用真实授权与命令 API；默认安全适配器只写库，不向车辆发指令。</small>
         </div>
       </div>
 
@@ -169,7 +183,7 @@
       </ol>
     </section>
 
-    <section class="workbench" aria-label="仿真参数与决策证据">
+    <section class="workbench" aria-label="遥测参数与决策证据">
       <form id="control-form" class="controls" onsubmit="return false;">
         <div class="section-heading compact">
           <div>
@@ -244,7 +258,7 @@
   </main>
 
   <footer>
-    <strong>安全边界：</strong>本项目是概念阶段的确定性仿真，不连接、不控制真实车辆；任何实车功能均需独立安全壳、封闭场地测试、法规验证与人工接管能力。
+    <strong>安全边界：</strong>遥测、决策、SQLite、授权与命令留痕均真实运行；默认适配器明确不控制车辆。实车接入必须使用制造商正式接口，并完成独立安全壳、封闭场地和法规验证。
   </footer>
 
   <script type="module" src="./src/app.js"></script>

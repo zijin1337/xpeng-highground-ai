@@ -1,8 +1,14 @@
 .DS_Store
 Thumbs.db
 node_modules/
+.venv/
+__pycache__/
+.pytest_cache/
+*.py[cod]
 .idea/
 .vscode/
 coverage/
 .qa/
+data/*.db
+data/*.db-*
 *.log

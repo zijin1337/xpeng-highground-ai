@@ -1,0 +1,26 @@
+{
+  "site_id": "garage-demo-01",
+  "vehicle_id": "vehicle-demo-01",
+  "source_id": "edge-gateway-01",
+  "environment": {
+    "rainfall_mm_h": 96,
+    "water_level_cm": 14,
+    "secondary_water_level_cm": 13.5,
+    "rise_rate_cm_min": 1.0,
+    "sensor_confidence": 0.91
+  },
+  "vehicle": {
+    "occupants_clear": true,
+    "charging_disconnected": true,
+    "vehicle_healthy": true,
+    "positioning_online": true,
+    "network_online": true,
+    "emergency_operator_online": true,
+    "water_contact_triggered": false,
+    "motion_state": "PARKED"
+  },
+  "site": {
+    "route_dry": true,
+    "route_blocked": false
+  }
+}

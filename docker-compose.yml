@@ -1,0 +1,19 @@
+services:
+  highground-api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      HIGHGROUND_ENV: development
+      HIGHGROUND_API_KEY: ${HIGHGROUND_API_KEY:-change-this-before-deploy}
+      HIGHGROUND_DATABASE_PATH: /app/data/highground.db
+      HIGHGROUND_ACTUATOR_MODE: record-only
+    volumes:
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped

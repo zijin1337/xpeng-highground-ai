@@ -1,9 +1,9 @@
 {
   "name": "xpeng-highground-ai",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "type": "module",
-  "description": "小鹏高地 AI：暴雨内涝场景下的车辆安全位移概念验证与交互仿真。",
+  "description": "高地 AI：暴雨内涝场景下可运行的车辆安全位移决策、遥测与证据服务。",
   "scripts": {
     "test": "node --test",
     "serve": "npx --yes serve ."

@@ -17,6 +17,22 @@ jobs:
       - name: Use Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
       - name: Run deterministic safety tests
         run: npm test
+
+  backend-api:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Use Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+      - name: Install backend dependencies
+        run: pip install -r backend/requirements-dev.txt
+      - name: Run API, database, authorization and decision tests
+        run: python -m pytest backend/tests -q

@@ -1,0 +1,311 @@
+from __future__ import annotations
+
+import hashlib
+import json
+import sqlite3
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+from uuid import uuid4
+
+from .models import DecisionOutput, TelemetryIn
+
+
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+@dataclass(frozen=True)
+class StoredEvent:
+    event_id: str
+    message_id: str
+    received_at: datetime
+    input_sha256: str
+    telemetry: TelemetryIn
+    result: DecisionOutput
+    duplicate: bool = False
+
+
+class Database:
+    def __init__(self, path: Path):
+        self.path = Path(path)
+
+    def connect(self) -> sqlite3.Connection:
+        connection = sqlite3.connect(self.path, timeout=10)
+        connection.row_factory = sqlite3.Row
+        connection.execute("PRAGMA foreign_keys = ON")
+        connection.execute("PRAGMA busy_timeout = 5000")
+        return connection
+
+    def initialize(self) -> None:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        with self.connect() as connection:
+            connection.execute("PRAGMA journal_mode = WAL")
+            connection.executescript(
+                """
+                CREATE TABLE IF NOT EXISTS telemetry (
+                    message_id TEXT PRIMARY KEY,
+                    site_id TEXT NOT NULL,
+                    vehicle_id TEXT NOT NULL,
+                    source_id TEXT NOT NULL,
+                    captured_at TEXT NOT NULL,
+                    received_at TEXT NOT NULL,
+                    input_sha256 TEXT NOT NULL,
+                    payload_json TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS decisions (
+                    event_id TEXT PRIMARY KEY,
+                    message_id TEXT NOT NULL UNIQUE,
+                    decision_code TEXT NOT NULL,
+                    risk_level TEXT NOT NULL,
+                    permission TEXT NOT NULL,
+                    latest_safe_start_min REAL,
+                    result_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY (message_id) REFERENCES telemetry(message_id)
+                );
+
+                CREATE TABLE IF NOT EXISTS authorizations (
+                    authorization_id TEXT PRIMARY KEY,
+                    event_id TEXT NOT NULL,
+                    owner_id TEXT NOT NULL,
+                    token_sha256 TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    expires_at TEXT NOT NULL,
+                    used_at TEXT,
+                    FOREIGN KEY (event_id) REFERENCES decisions(event_id)
+                );
+
+                CREATE TABLE IF NOT EXISTS commands (
+                    command_id TEXT PRIMARY KEY,
+                    event_id TEXT NOT NULL,
+                    authorization_id TEXT NOT NULL,
+                    command_type TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    response_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY (event_id) REFERENCES decisions(event_id),
+                    FOREIGN KEY (authorization_id) REFERENCES authorizations(authorization_id)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_telemetry_site_vehicle_received
+                    ON telemetry(site_id, vehicle_id, received_at DESC);
+                CREATE INDEX IF NOT EXISTS idx_authorizations_event
+                    ON authorizations(event_id, expires_at DESC);
+                """
+            )
+
+    def health(self) -> bool:
+        with self.connect() as connection:
+            row = connection.execute("SELECT 1 AS ok").fetchone()
+        return bool(row and row["ok"] == 1)
+
+    @staticmethod
+    def _row_to_event(row: sqlite3.Row, *, duplicate: bool = False) -> StoredEvent:
+        return StoredEvent(
+            event_id=row["event_id"],
+            message_id=row["message_id"],
+            received_at=datetime.fromisoformat(row["received_at"]),
+            input_sha256=row["input_sha256"],
+            telemetry=TelemetryIn.model_validate_json(row["payload_json"]),
+            result=DecisionOutput.model_validate_json(row["result_json"]),
+            duplicate=duplicate,
+        )
+
+    @staticmethod
+    def _event_select(where_clause: str) -> str:
+        return f"""
+            SELECT d.event_id, t.message_id, t.received_at, t.input_sha256,
+                   t.payload_json, d.result_json
+            FROM decisions d
+            JOIN telemetry t ON t.message_id = d.message_id
+            WHERE {where_clause}
+        """
+
+    def save_telemetry_and_decision(
+        self,
+        telemetry: TelemetryIn,
+        result: DecisionOutput,
+    ) -> StoredEvent:
+        payload_json = telemetry.model_dump_json()
+        canonical_json = json.dumps(
+            telemetry.model_dump(mode="json"),
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        input_sha256 = hashlib.sha256(canonical_json.encode("utf-8")).hexdigest()
+        result_json = result.model_dump_json()
+        received_at = _utc_now()
+        event_id = f"evt_{uuid4().hex}"
+
+        with self.connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            existing = connection.execute(
+                self._event_select("t.message_id = ?"),
+                (telemetry.message_id,),
+            ).fetchone()
+            if existing:
+                connection.rollback()
+                return self._row_to_event(existing, duplicate=True)
+
+            connection.execute(
+                """
+                INSERT INTO telemetry (
+                    message_id, site_id, vehicle_id, source_id, captured_at,
+                    received_at, input_sha256, payload_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    telemetry.message_id,
+                    telemetry.site_id,
+                    telemetry.vehicle_id,
+                    telemetry.source_id,
+                    telemetry.captured_at.isoformat(),
+                    received_at.isoformat(),
+                    input_sha256,
+                    payload_json,
+                ),
+            )
+            connection.execute(
+                """
+                INSERT INTO decisions (
+                    event_id, message_id, decision_code, risk_level, permission,
+                    latest_safe_start_min, result_json, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    event_id,
+                    telemetry.message_id,
+                    result.decision.value,
+                    result.risk_level.value,
+                    result.permission.value,
+                    result.timing.latest_safe_start_min,
+                    result_json,
+                    received_at.isoformat(),
+                ),
+            )
+            connection.commit()
+
+        return StoredEvent(
+            event_id=event_id,
+            message_id=telemetry.message_id,
+            received_at=received_at,
+            input_sha256=input_sha256,
+            telemetry=telemetry,
+            result=result,
+        )
+
+    def get_event(self, event_id: str) -> StoredEvent | None:
+        with self.connect() as connection:
+            row = connection.execute(
+                self._event_select("d.event_id = ?"),
+                (event_id,),
+            ).fetchone()
+        return self._row_to_event(row) if row else None
+
+    def get_latest(self, site_id: str, vehicle_id: str) -> StoredEvent | None:
+        sql = self._event_select("t.site_id = ? AND t.vehicle_id = ?") + " ORDER BY t.received_at DESC LIMIT 1"
+        with self.connect() as connection:
+            row = connection.execute(sql, (site_id, vehicle_id)).fetchone()
+        return self._row_to_event(row) if row else None
+
+    def list_events(self, site_id: str, vehicle_id: str, limit: int = 20) -> list[StoredEvent]:
+        sql = self._event_select("t.site_id = ? AND t.vehicle_id = ?") + " ORDER BY t.received_at DESC LIMIT ?"
+        with self.connect() as connection:
+            rows = connection.execute(sql, (site_id, vehicle_id, limit)).fetchall()
+        return [self._row_to_event(row) for row in rows]
+
+    def create_authorization(
+        self,
+        *,
+        event_id: str,
+        owner_id: str,
+        token_sha256: str,
+        expires_at: datetime,
+    ) -> str:
+        authorization_id = f"auth_{uuid4().hex}"
+        with self.connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO authorizations (
+                    authorization_id, event_id, owner_id, token_sha256,
+                    created_at, expires_at
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    authorization_id,
+                    event_id,
+                    owner_id,
+                    token_sha256,
+                    _utc_now().isoformat(),
+                    expires_at.isoformat(),
+                ),
+            )
+        return authorization_id
+
+    def consume_authorization(
+        self,
+        *,
+        event_id: str,
+        token_sha256: str,
+        now: datetime,
+    ) -> str | None:
+        with self.connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                """
+                SELECT authorization_id
+                FROM authorizations
+                WHERE event_id = ? AND token_sha256 = ?
+                  AND used_at IS NULL AND expires_at > ?
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (event_id, token_sha256, now.isoformat()),
+            ).fetchone()
+            if not row:
+                connection.rollback()
+                return None
+            updated = connection.execute(
+                """
+                UPDATE authorizations
+                SET used_at = ?
+                WHERE authorization_id = ? AND used_at IS NULL
+                """,
+                (now.isoformat(), row["authorization_id"]),
+            )
+            if updated.rowcount != 1:
+                connection.rollback()
+                return None
+            connection.commit()
+            return str(row["authorization_id"])
+
+    def record_command(
+        self,
+        *,
+        event_id: str,
+        authorization_id: str,
+        status: str,
+        response: dict[str, object],
+    ) -> str:
+        command_id = f"cmd_{uuid4().hex}"
+        with self.connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO commands (
+                    command_id, event_id, authorization_id, command_type,
+                    status, response_json, created_at
+                ) VALUES (?, ?, ?, 'MIGRATE_TO_HIGH_POINT', ?, ?, ?)
+                """,
+                (
+                    command_id,
+                    event_id,
+                    authorization_id,
+                    status,
+                    json.dumps(response, ensure_ascii=False, sort_keys=True),
+                    _utc_now().isoformat(),
+                ),
+            )
+        return command_id
