@@ -71,7 +71,12 @@
           <p class="section-kicker">车 · 场 · 云闭环</p>
           <h2 id="simulator-title">地下车库数字孪生</h2>
         </div>
-        <p id="decision-reason" class="decision-reason" role="status" aria-live="polite"></p>
+        <div class="scene-toolbar">
+          <p id="decision-reason" class="decision-reason" role="status" aria-live="polite"></p>
+          <button id="play-migration-button" class="button animation-button" type="button">
+            <span aria-hidden="true">▶</span> 播放车辆迁移动画
+          </button>
+        </div>
       </div>
 
       <div class="scene-wrap">
@@ -100,7 +105,7 @@
           <rect width="1000" height="360" fill="url(#grid)" rx="20"/>
           <path d="M0 302 H625 L835 170 H1000 V360 H0 Z" fill="#1d3444"/>
           <path d="M0 302 H625 L835 170 H1000" fill="none" stroke="#b9c9d3" stroke-opacity=".7" stroke-width="4"/>
-          <path d="M162 280 C350 250 540 258 720 205 C780 188 824 176 880 174" fill="none" stroke="#a5e8ef" stroke-width="4" stroke-dasharray="10 12" opacity=".75"/>
+          <path id="migration-route" d="M162 280 C350 250 540 258 720 205 C780 188 824 176 880 174" fill="none" stroke="#a5e8ef" stroke-width="4" stroke-dasharray="10 12" opacity=".75"/>
 
           <g id="high-point" transform="translate(840 82)">
             <path d="M0 70 L62 8 L124 70" fill="none" stroke="#55e5bb" stroke-width="5"/>
@@ -120,12 +125,19 @@
           </g>
 
           <g id="vehicle" transform="translate(155 235)">
+            <path id="headlight-beam" d="M150 42 L255 19 L255 77 L150 57 Z" fill="#ffe79a" opacity="0"/>
             <ellipse cx="76" cy="66" rx="80" ry="13" fill="#020a10" opacity=".5"/>
             <path d="M8 45 L28 17 Q38 4 58 4 H104 Q121 5 138 23 L155 45 Q163 49 163 61 V69 H0 V55 Q0 48 8 45Z" fill="#dbe7ee" stroke="#ffffff" stroke-width="3"/>
             <path d="M39 18 H101 Q112 18 126 41 H23 Q28 29 39 18Z" fill="#173248"/>
             <path d="M54 19 V41 M107 22 L99 41" stroke="#7aa9c1" stroke-width="2"/>
-            <circle cx="34" cy="68" r="15" fill="#07131d" stroke="#7c909e" stroke-width="5"/>
-            <circle cx="133" cy="68" r="15" fill="#07131d" stroke="#7c909e" stroke-width="5"/>
+            <g class="wheel" transform="translate(34 68)">
+              <circle r="15" fill="#07131d" stroke="#7c909e" stroke-width="5"/>
+              <path class="wheel-spokes" d="M-8 0 H8 M0 -8 V8" stroke="#d4e0e6" stroke-width="2"/>
+            </g>
+            <g class="wheel" transform="translate(133 68)">
+              <circle r="15" fill="#07131d" stroke="#7c909e" stroke-width="5"/>
+              <path class="wheel-spokes" d="M-8 0 H8 M0 -8 V8" stroke="#d4e0e6" stroke-width="2"/>
+            </g>
             <rect x="151" y="48" width="8" height="10" rx="3" fill="#f46a4e"/>
           </g>
 
@@ -136,6 +148,16 @@
           </g>
           <text id="water-label" x="25" y="333">当前积水 4.0 cm</text>
         </svg>
+        <div class="migration-hud" aria-live="polite">
+          <div class="migration-stage">
+            <span id="animation-step">等待播放</span>
+            <strong id="animation-speed">0.0 km/h</strong>
+          </div>
+          <div class="progress-track" aria-hidden="true">
+            <span id="animation-progress"></span>
+          </div>
+          <span id="animation-percent">0%</span>
+        </div>
       </div>
 
       <ol class="pipeline" aria-label="物理 AI 决策闭环">

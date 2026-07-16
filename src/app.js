@@ -67,17 +67,25 @@ const ids = [
   "risk-value", "confidence-value", "latest-start-value", "threshold-value", "decision-reason",
   "evidence-body", "event-id", "snapshot-hash", "action-permission", "event-time", "vehicle",
   "water", "water-line", "water-label", "scene-status-dot", "scene-status-text", "scene-desc",
+  "play-migration-button", "animation-step", "animation-speed", "animation-progress",
+  "animation-percent", "migration-route",
 ];
 
 const el = Object.fromEntries(ids.map((id) => [id, document.getElementById(id)]));
 let eventCounter = 0;
 let activeScenario = { ...SCENARIOS.normal };
+let currentResult = null;
+let animationFrameId = null;
+let animationRunId = 0;
+let isAnimating = false;
+let vehicleAtHighPoint = false;
 
 function setCheckbox(element, checked) {
   element.checked = Boolean(checked);
 }
 
 function applyScenario(key) {
+  cancelMigrationAnimation({ resetVehicle: true });
   activeScenario = { ...(SCENARIOS[key] ?? SCENARIOS.normal) };
   el.rainfall.value = activeScenario.rainfallMmH;
   el["water-level"].value = activeScenario.waterLevelCm;
@@ -153,7 +161,7 @@ function updateScene(result) {
   );
   el["water-label"].textContent = `当前积水 ${waterLevel.toFixed(1)} cm`;
 
-  if (result.authorizedToMove) {
+  if (vehicleAtHighPoint && result.authorizedToMove) {
     el.vehicle.setAttribute("transform", "translate(760 135) scale(.8)");
   } else if (result.decision === DECISIONS.EMERGENCY_STOP) {
     el.vehicle.setAttribute("transform", "translate(390 214) scale(.92)");
@@ -248,23 +256,146 @@ function runDecision() {
   renderEvidence(result);
   updateScene(result);
   updatePipeline(result);
+  currentResult = result;
   return result;
 }
 
 function stepOneMinute() {
+  cancelMigrationAnimation({ resetVehicle: true });
   const rise = Number(el["rise-rate"].value);
   el["water-level"].value = Math.min(30, Number(el["water-level"].value) + rise);
   el["secondary-water"].value = Math.min(30, Number(el["secondary-water"].value) + rise * 0.96);
   runDecision();
 }
 
+function setAnimationHud(step, speedKmh, progress) {
+  const percent = Math.round(Math.min(1, Math.max(0, progress)) * 100);
+  el["animation-step"].textContent = step;
+  el["animation-speed"].textContent = `${speedKmh.toFixed(1)} km/h`;
+  el["animation-progress"].style.width = `${percent}%`;
+  el["animation-percent"].textContent = `${percent}%`;
+}
+
+function setVehiclePose(x, y, rotation = 0, scale = 1) {
+  el.vehicle.setAttribute("transform", `translate(${x.toFixed(1)} ${y.toFixed(1)}) rotate(${rotation.toFixed(1)} 76 68) scale(${scale.toFixed(3)})`);
+}
+
+function cancelMigrationAnimation({ resetVehicle = false } = {}) {
+  animationRunId += 1;
+  if (animationFrameId !== null) cancelAnimationFrame(animationFrameId);
+  animationFrameId = null;
+  isAnimating = false;
+  el.vehicle.classList.remove("is-animating", "is-driving");
+  el["migration-route"].classList.remove("is-active");
+  el["play-migration-button"].disabled = false;
+  el["play-migration-button"].innerHTML = '<span aria-hidden="true">▶</span> 播放车辆迁移动画';
+  if (resetVehicle) {
+    vehicleAtHighPoint = false;
+    setVehiclePose(155, 235);
+    setAnimationHud("等待播放", 0, 0);
+  }
+}
+
+function motionPose(progress) {
+  if (progress <= 0.56) {
+    const local = progress / 0.56;
+    return {
+      x: 155 + 355 * local,
+      y: 235 - 8 * Math.sin(local * Math.PI / 2),
+      rotation: 0,
+      scale: 1,
+    };
+  }
+  const local = (progress - 0.56) / 0.44;
+  const eased = 1 - Math.pow(1 - local, 2);
+  return {
+    x: 510 + 250 * eased,
+    y: 227 - 92 * eased,
+    rotation: -19 * Math.sin(local * Math.PI),
+    scale: 1 - 0.2 * eased,
+  };
+}
+
+function animationPhase(progress) {
+  if (progress < 0.12) return { step: "安全闸逐项自检", speed: 0, moving: false };
+  if (progress < 0.22) return { step: "车主单次授权已确认", speed: 0, moving: false };
+  if (progress < 0.78) {
+    const moveProgress = (progress - 0.22) / 0.56;
+    const speed = Math.max(1.2, 4.8 * Math.sin(moveProgress * Math.PI));
+    return { step: moveProgress < 0.58 ? "沿干燥路线低速迁移" : "进入坡道并持续监测", speed, moving: true, moveProgress };
+  }
+  if (progress < 0.91) return { step: "到达高位点并锁车", speed: 0, moving: false };
+  return { step: "生成到达证据与事件留痕", speed: 0, moving: false };
+}
+
+function playMigrationDemo() {
+  if (isAnimating) return;
+
+  el.scenario.value = "rising";
+  applyScenario("rising");
+  el["owner-authorized"].checked = true;
+  currentResult = runDecision();
+  if (currentResult.decision !== DECISIONS.MIGRATE_NOW || !currentResult.authorizedToMove) return;
+
+  const runId = ++animationRunId;
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const duration = reducedMotion ? 350 : 6800;
+  const startedAt = performance.now();
+  isAnimating = true;
+  vehicleAtHighPoint = false;
+  setVehiclePose(155, 235);
+  el.vehicle.classList.add("is-animating");
+  el["migration-route"].classList.add("is-active");
+  el["play-migration-button"].disabled = true;
+  el["play-migration-button"].textContent = "迁移演示进行中…";
+  el["scene-status-dot"].setAttribute("fill", "#54e4b8");
+
+  const frame = (now) => {
+    if (runId !== animationRunId) return;
+    const progress = Math.min(1, (now - startedAt) / duration);
+    const phase = animationPhase(progress);
+    el.vehicle.classList.toggle("is-driving", phase.moving);
+    if (phase.moving) {
+      const pose = motionPose(phase.moveProgress);
+      setVehiclePose(pose.x, pose.y, pose.rotation, pose.scale);
+    } else if (progress >= 0.78) {
+      setVehiclePose(760, 135, 0, 0.8);
+    }
+    setAnimationHud(phase.step, phase.speed, progress);
+    el["scene-status-text"].textContent = phase.step;
+
+    if (progress < 1) {
+      animationFrameId = requestAnimationFrame(frame);
+      return;
+    }
+
+    animationFrameId = null;
+    isAnimating = false;
+    vehicleAtHighPoint = true;
+    el.vehicle.classList.remove("is-animating", "is-driving");
+    el["migration-route"].classList.remove("is-active");
+    setVehiclePose(760, 135, 0, 0.8);
+    setAnimationHud("迁移完成 · 已停入高位安全点", 0, 1);
+    el["scene-status-text"].textContent = "已到达高位安全点";
+    el["play-migration-button"].disabled = false;
+    el["play-migration-button"].innerHTML = '<span aria-hidden="true">↻</span> 重新播放迁移动画';
+  };
+
+  animationFrameId = requestAnimationFrame(frame);
+}
+
 el.scenario.addEventListener("change", () => applyScenario(el.scenario.value));
-el["run-button"].addEventListener("click", runDecision);
+el["run-button"].addEventListener("click", () => {
+  cancelMigrationAnimation({ resetVehicle: true });
+  runDecision();
+});
 el["step-button"].addEventListener("click", stepOneMinute);
 el["reset-button"].addEventListener("click", () => applyScenario(el.scenario.value));
+el["play-migration-button"].addEventListener("click", playMigrationDemo);
 
 for (const input of document.querySelectorAll("#control-form input")) {
   input.addEventListener("input", () => {
+    cancelMigrationAnimation({ resetVehicle: true });
     updateOutputs();
     runDecision();
   });

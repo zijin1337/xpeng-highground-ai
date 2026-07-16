@@ -285,6 +285,33 @@ main { padding: 58px 0 72px; }
   text-align: right;
 }
 
+.scene-toolbar {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.animation-button {
+  min-width: 220px;
+  border-color: rgba(84, 228, 184, .55);
+  background: linear-gradient(135deg, rgba(84, 228, 184, .18), rgba(40, 217, 231, .12));
+  color: var(--green);
+  font-weight: 800;
+  box-shadow: 0 0 0 1px rgba(84, 228, 184, .04), 0 10px 30px rgba(0, 0, 0, .18);
+}
+
+.animation-button:hover {
+  border-color: var(--green);
+  background: linear-gradient(135deg, rgba(84, 228, 184, .26), rgba(40, 217, 231, .18));
+}
+
+.animation-button:disabled {
+  cursor: wait;
+  opacity: .68;
+  transform: none;
+}
+
 .scene-wrap { margin-top: 14px; }
 
 #garage-scene {
@@ -304,9 +331,90 @@ main { padding: 58px 0 72px; }
   transition: transform 1.2s cubic-bezier(.2, .8, .2, 1);
 }
 
+#vehicle.is-animating {
+  transition: none;
+  filter: drop-shadow(0 0 16px rgba(40, 217, 231, .35));
+}
+
+#vehicle.is-driving .wheel-spokes {
+  animation: wheel-spin .48s linear infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+#vehicle.is-driving #headlight-beam {
+  opacity: .42;
+  animation: headlight-pulse 1.15s ease-in-out infinite alternate;
+}
+
+#migration-route.is-active {
+  stroke: var(--green);
+  stroke-width: 6;
+  stroke-dasharray: 12 10;
+  animation: route-flow .7s linear infinite;
+  filter: drop-shadow(0 0 6px rgba(84, 228, 184, .5));
+}
+
 #water,
 #water-line {
   transition: transform .5s ease;
+}
+
+.migration-hud {
+  display: grid;
+  grid-template-columns: minmax(150px, auto) minmax(180px, 1fr) 48px;
+  align-items: center;
+  gap: 14px;
+  margin-top: 12px;
+  padding: 11px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(8, 25, 37, .82);
+  font-size: .76rem;
+}
+
+.migration-stage {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.migration-stage span { color: var(--muted); }
+.migration-stage strong { color: var(--green); white-space: nowrap; }
+
+.progress-track {
+  overflow: hidden;
+  height: 7px;
+  border-radius: 99px;
+  background: var(--surface-3);
+}
+
+#animation-progress {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--cyan), var(--green));
+  box-shadow: 0 0 14px rgba(84, 228, 184, .45);
+}
+
+#animation-percent {
+  color: var(--muted);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes wheel-spin {
+  to { rotate: 360deg; }
+}
+
+@keyframes route-flow {
+  to { stroke-dashoffset: -22; }
+}
+
+@keyframes headlight-pulse {
+  from { opacity: .24; }
+  to { opacity: .55; }
 }
 
 .pipeline {
@@ -530,6 +638,7 @@ body[data-tone="danger"] #risk-value { color: var(--red); }
   .intro { gap: 2rem; }
   .scenario-actions { max-width: 520px; }
   .decision-reason { text-align: left; }
+  .scene-toolbar { align-items: flex-start; width: 100%; }
   .section-heading { align-items: flex-start; flex-direction: column; gap: .2rem; }
 }
 
@@ -546,6 +655,9 @@ body[data-tone="danger"] #risk-value { color: var(--red); }
   .simulator,
   .controls,
   .evidence { border-radius: 14px; padding: 16px; }
+  .animation-button { width: 100%; min-width: 0; }
+  .migration-hud { grid-template-columns: 1fr 48px; gap: 9px; }
+  .migration-stage { grid-column: 1 / -1; }
   .pipeline { grid-template-columns: 1fr 1fr; }
   .pipeline li:last-child { grid-column: 1 / -1; }
   .gate-grid { grid-template-columns: 1fr; }
