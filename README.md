@@ -39,6 +39,18 @@ flowchart LR
 
 ## 方式一：Docker 启动
 
+### Windows 双击启动
+
+确保 Docker Desktop 已运行，然后双击仓库根目录的 `start-highground.cmd`。脚本会构建并启动服务、等待健康检查通过，再自动打开浏览器。首次本地演示可在页面输入：
+
+```text
+X-API-Key: change-this-before-deploy
+```
+
+需要停止时，双击 `stop-highground.cmd`。
+
+### 命令行启动
+
 复制环境变量模板，并务必修改 API Key：
 
 ```bash

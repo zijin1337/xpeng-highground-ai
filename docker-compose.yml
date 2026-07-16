@@ -2,7 +2,7 @@ services:
   highground-api:
     build: .
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     environment:
       HIGHGROUND_ENV: development
       HIGHGROUND_API_KEY: ${HIGHGROUND_API_KEY:-change-this-before-deploy}
