@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="小鹏高地 AI：暴雨内涝场景下，从风险预警到安全位移的物理 AI 概念验证。">
+  <meta name="theme-color" content="#081826">
+  <title>高地 AI · 车辆安全位移仿真</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">跳到主要内容</a>
+
+  <header class="site-header">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">H</div>
+      <div>
+        <p class="eyebrow">XPENG PHYSICAL AI CONCEPT</p>
+        <h1>高地 AI <span>HighGround</span></h1>
+      </div>
+    </div>
+    <div class="header-note">
+      <span class="live-dot" aria-hidden="true"></span>
+      概念验证 · 不连接真实车辆
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="intro" aria-labelledby="intro-title">
+      <div>
+        <p class="section-kicker">从“收到预警”到“安全上高地”</p>
+        <h2 id="intro-title">让 AI 在水到之前完成判断，<br>让车辆只在安全窗口内行动。</h2>
+        <p>调整降雨、水位与安全闸，观察系统如何从多源感知生成可解释的 Go / No-Go 结果。</p>
+      </div>
+      <div class="scenario-actions" aria-label="场景控制">
+        <label for="scenario">场景预设</label>
+        <select id="scenario">
+          <option value="normal">日常守望</option>
+          <option value="rising">暴雨快速上涨</option>
+          <option value="conflict">传感器冲突</option>
+          <option value="blocked">迁移路线受阻</option>
+          <option value="occupant">车内有人</option>
+          <option value="movingFault">移动中通信异常</option>
+        </select>
+        <button id="run-button" class="button button-primary" type="button">运行决策</button>
+        <button id="step-button" class="button" type="button">推进 1 分钟</button>
+      </div>
+    </section>
+
+    <section class="status-grid" aria-label="实时决策摘要">
+      <article class="status-card">
+        <span>当前决策</span>
+        <strong id="decision-value">原地守望</strong>
+        <small id="permission-value">权限：无需移动</small>
+      </article>
+      <article class="status-card">
+        <span>风险等级</span>
+        <strong id="risk-value">LOW</strong>
+        <small id="confidence-value">证据置信度 94%</small>
+      </article>
+      <article class="status-card">
+        <span>最晚安全启动</span>
+        <strong id="latest-start-value">--</strong>
+        <small id="threshold-value">距禁行水位 -- cm</small>
+      </article>
+    </section>
+
+    <section class="simulator" aria-labelledby="simulator-title">
+      <div class="section-heading">
+        <div>
+          <p class="section-kicker">车 · 场 · 云闭环</p>
+          <h2 id="simulator-title">地下车库数字孪生</h2>
+        </div>
+        <p id="decision-reason" class="decision-reason" role="status" aria-live="polite"></p>
+      </div>
+
+      <div class="scene-wrap">
+        <svg id="garage-scene" viewBox="0 0 1000 360" role="img" aria-labelledby="scene-title scene-desc">
+          <title id="scene-title">地下车库车辆安全位移仿真</title>
+          <desc id="scene-desc">车辆位于左侧低洼车位，右侧坡道通往高位安全点，蓝色区域表示积水高度。</desc>
+          <defs>
+            <linearGradient id="sky-gradient" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#112c42"/>
+              <stop offset="1" stop-color="#081722"/>
+            </linearGradient>
+            <linearGradient id="water-gradient" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#26d7e8" stop-opacity=".62"/>
+              <stop offset="1" stop-color="#087caf" stop-opacity=".82"/>
+            </linearGradient>
+            <filter id="soft-glow">
+              <feGaussianBlur stdDeviation="5" result="blur"/>
+              <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+            <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#8ea4b2" stroke-opacity=".12"/>
+            </pattern>
+          </defs>
+
+          <rect width="1000" height="360" fill="url(#sky-gradient)" rx="20"/>
+          <rect width="1000" height="360" fill="url(#grid)" rx="20"/>
+          <path d="M0 302 H625 L835 170 H1000 V360 H0 Z" fill="#1d3444"/>
+          <path d="M0 302 H625 L835 170 H1000" fill="none" stroke="#b9c9d3" stroke-opacity=".7" stroke-width="4"/>
+          <path d="M162 280 C350 250 540 258 720 205 C780 188 824 176 880 174" fill="none" stroke="#a5e8ef" stroke-width="4" stroke-dasharray="10 12" opacity=".75"/>
+
+          <g id="high-point" transform="translate(840 82)">
+            <path d="M0 70 L62 8 L124 70" fill="none" stroke="#55e5bb" stroke-width="5"/>
+            <path d="M23 70 V46 H101 V70" fill="#123d3b" stroke="#55e5bb" stroke-width="3"/>
+            <text x="62" y="96" text-anchor="middle">高位安全点</text>
+          </g>
+
+          <g id="sensor" transform="translate(90 76)">
+            <circle cx="0" cy="0" r="8" fill="#27d5e5" filter="url(#soft-glow)"/>
+            <path d="M-18 -17 A25 25 0 0 1 18 -17 M-31 -30 A43 43 0 0 1 31 -30" fill="none" stroke="#27d5e5" stroke-width="3" opacity=".7"/>
+            <text x="0" y="36" text-anchor="middle">车库边缘网关</text>
+          </g>
+
+          <g id="water-group">
+            <rect id="water" x="0" y="285" width="630" height="75" fill="url(#water-gradient)"/>
+            <path id="water-line" d="M0 285 C80 276 145 294 220 285 S360 276 440 285 S550 294 630 285" fill="none" stroke="#73f1ff" stroke-width="3"/>
+          </g>
+
+          <g id="vehicle" transform="translate(155 235)">
+            <ellipse cx="76" cy="66" rx="80" ry="13" fill="#020a10" opacity=".5"/>
+            <path d="M8 45 L28 17 Q38 4 58 4 H104 Q121 5 138 23 L155 45 Q163 49 163 61 V69 H0 V55 Q0 48 8 45Z" fill="#dbe7ee" stroke="#ffffff" stroke-width="3"/>
+            <path d="M39 18 H101 Q112 18 126 41 H23 Q28 29 39 18Z" fill="#173248"/>
+            <path d="M54 19 V41 M107 22 L99 41" stroke="#7aa9c1" stroke-width="2"/>
+            <circle cx="34" cy="68" r="15" fill="#07131d" stroke="#7c909e" stroke-width="5"/>
+            <circle cx="133" cy="68" r="15" fill="#07131d" stroke="#7c909e" stroke-width="5"/>
+            <rect x="151" y="48" width="8" height="10" rx="3" fill="#f46a4e"/>
+          </g>
+
+          <g id="scene-label" transform="translate(720 286)">
+            <rect width="230" height="45" rx="22" fill="#0b2130" stroke="#3e5f73"/>
+            <circle id="scene-status-dot" cx="24" cy="22.5" r="6" fill="#55e5bb"/>
+            <text id="scene-status-text" x="42" y="28">等待计算</text>
+          </g>
+          <text id="water-label" x="25" y="333">当前积水 4.0 cm</text>
+        </svg>
+      </div>
+
+      <ol class="pipeline" aria-label="物理 AI 决策闭环">
+        <li data-stage="sense"><span>01</span><b>感知</b><small>雨量 · 水位 · 车况</small></li>
+        <li data-stage="predict"><span>02</span><b>预测</b><small>上涨速度 · 安全窗口</small></li>
+        <li data-stage="decide"><span>03</span><b>决策</b><small>Go / No-Go</small></li>
+        <li data-stage="act"><span>04</span><b>行动</b><small>授权 · 低速迁移</small></li>
+        <li data-stage="learn"><span>05</span><b>留痕</b><small>证据 · 事件日志</small></li>
+      </ol>
+    </section>
+
+    <section class="workbench" aria-label="仿真参数与决策证据">
+      <form id="control-form" class="controls" onsubmit="return false;">
+        <div class="section-heading compact">
+          <div>
+            <p class="section-kicker">给定输入</p>
+            <h2>环境与安全条件</h2>
+          </div>
+          <button id="reset-button" class="text-button" type="button">恢复预设</button>
+        </div>
+
+        <div class="range-grid">
+          <label>
+            <span>降雨强度 <output id="rain-output">35 mm/h</output></span>
+            <input id="rainfall" name="rainfallMmH" type="range" min="0" max="120" step="1" value="35">
+          </label>
+          <label>
+            <span>主水位 <output id="water-output">4.0 cm</output></span>
+            <input id="water-level" name="waterLevelCm" type="range" min="0" max="30" step="0.5" value="4">
+          </label>
+          <label>
+            <span>交叉水位 <output id="water-2-output">4.0 cm</output></span>
+            <input id="secondary-water" name="secondaryWaterLevelCm" type="range" min="0" max="30" step="0.5" value="4">
+          </label>
+          <label>
+            <span>上涨速度 <output id="rise-output">0.2 cm/min</output></span>
+            <input id="rise-rate" name="riseRateCmMin" type="range" min="0" max="2" step="0.1" value="0.2">
+          </label>
+          <label>
+            <span>证据置信度 <output id="confidence-output">94%</output></span>
+            <input id="sensor-confidence" name="sensorConfidence" type="range" min="0" max="1" step="0.01" value="0.94">
+          </label>
+        </div>
+
+        <fieldset>
+          <legend>自动迁移“七道闸”与授权</legend>
+          <div class="gate-grid">
+            <label><input id="route-dry" name="routeDry" type="checkbox" checked> 路线全程干燥</label>
+            <label><input id="route-open" name="routeOpen" type="checkbox" checked> 出口与闸机可用</label>
+            <label><input id="occupants-clear" name="occupantsClear" type="checkbox" checked> 车内无人或宠物</label>
+            <label><input id="charging-disconnected" name="chargingDisconnected" type="checkbox" checked> 充电枪已拔除</label>
+            <label><input id="vehicle-healthy" name="vehicleHealthy" type="checkbox" checked> 车辆关键系统健康</label>
+            <label><input id="positioning-online" name="positioningOnline" type="checkbox" checked> 定位与场端在线</label>
+            <label><input id="network-online" name="networkOnline" type="checkbox" checked> 主备通信可用</label>
+            <label><input id="operator-online" name="emergencyOperatorOnline" type="checkbox" checked> 远程安全员在线</label>
+            <label class="authorization"><input id="owner-authorized" name="ownerAuthorized" type="checkbox"> 车主确认本次单次授权</label>
+          </div>
+        </fieldset>
+      </form>
+
+      <section class="evidence" aria-labelledby="evidence-title">
+        <div class="section-heading compact">
+          <div>
+            <p class="section-kicker">决策日志</p>
+            <h2 id="evidence-title">可解释证据链</h2>
+          </div>
+          <span id="event-id" class="event-id">EVENT-0001</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>检查项</th><th>结果</th><th>证据</th></tr>
+            </thead>
+            <tbody id="evidence-body"></tbody>
+          </table>
+        </div>
+        <div class="audit-log" aria-live="polite">
+          <div><span>输入快照</span><code id="snapshot-hash">--</code></div>
+          <div><span>动作权限</span><strong id="action-permission">NONE</strong></div>
+          <div><span>事件时间</span><time id="event-time">--</time></div>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <footer>
+    <strong>安全边界：</strong>本项目是概念阶段的确定性仿真，不连接、不控制真实车辆；任何实车功能均需独立安全壳、封闭场地测试、法规验证与人工接管能力。
+  </footer>
+
+  <script type="module" src="./src/app.js"></script>
+</body>
+</html>
