@@ -16,6 +16,8 @@ concurrency:
 
 jobs:
   deploy:
+    # 私有仓库默认不发布页面；改为 Public 后手动运行本工作流即可上线。
+    if: github.event.repository.visibility == 'public'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
