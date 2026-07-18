@@ -146,11 +146,11 @@ function permissionText(result) {
 
 function toneColor(tone) {
   return {
-    safe: "#54e4b8",
-    watch: "#ffc85a",
-    warning: "#ffc85a",
-    danger: "#ff705c",
-  }[tone] ?? "#28d9e7";
+    safe: "#1e7658",
+    watch: "#9a6800",
+    warning: "#9a6800",
+    danger: "#b83b33",
+  }[tone] ?? "#2d8fa3";
 }
 
 function updateScene(result) {
@@ -246,7 +246,7 @@ function renderDecision(result, metadata = {}) {
   el["decision-value"].textContent = result.label;
   el["permission-value"].textContent = permissionText(result);
   el["risk-value"].textContent = result.riskLevel;
-  el["confidence-value"].textContent = `证据置信度 ${(result.inputs.sensorConfidence * 100).toFixed(0)}%`;
+  el["confidence-value"].textContent = `${(result.inputs.sensorConfidence * 100).toFixed(0)}%`;
   el["latest-start-value"].textContent = formatMinutes(result.timing.latestSafeStartMin);
   el["threshold-value"].textContent = `距禁行水位 ${Math.max(0, result.timing.remainingCm).toFixed(1)} cm`;
   el["decision-reason"].textContent = result.reason;
@@ -298,7 +298,7 @@ function cancelMigrationAnimation({ resetVehicle = false } = {}) {
   el.vehicle.classList.remove("is-animating", "is-driving");
   el["migration-route"].classList.remove("is-active");
   el["play-migration-button"].disabled = false;
-  el["play-migration-button"].innerHTML = '<span aria-hidden="true">▶</span> 播放车辆迁移动画';
+  el["play-migration-button"].innerHTML = '<span aria-hidden="true">▶</span> 播放迁移';
   if (resetVehicle) {
     vehicleAtHighPoint = false;
     setVehiclePose(155, 235);
@@ -349,7 +349,7 @@ function playMigrationDemo() {
 
   const runId = ++animationRunId;
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const duration = reducedMotion ? 350 : 6800;
+  const duration = 6800;
   const startedAt = performance.now();
   isAnimating = true;
   vehicleAtHighPoint = false;
@@ -357,8 +357,19 @@ function playMigrationDemo() {
   el.vehicle.classList.add("is-animating");
   el["migration-route"].classList.add("is-active");
   el["play-migration-button"].disabled = true;
-  el["play-migration-button"].textContent = "迁移演示进行中…";
-  el["scene-status-dot"].setAttribute("fill", "#54e4b8");
+  el["play-migration-button"].textContent = "迁移进行中…";
+  el["scene-status-dot"].setAttribute("fill", "#1e7658");
+
+  if (reducedMotion) {
+    isAnimating = false;
+    vehicleAtHighPoint = true;
+    setVehiclePose(760, 135, 0, 0.8);
+    setAnimationHud("迁移完成 · 已停入高位安全点", 0, 1);
+    el["scene-status-text"].textContent = "已到达高位安全点";
+    el["play-migration-button"].disabled = false;
+    el["play-migration-button"].innerHTML = '<span aria-hidden="true">↻</span> 重新播放';
+    return;
+  }
 
   const frame = (now) => {
     if (runId !== animationRunId) return;
@@ -388,7 +399,7 @@ function playMigrationDemo() {
     setAnimationHud("迁移完成 · 已停入高位安全点", 0, 1);
     el["scene-status-text"].textContent = "已到达高位安全点";
     el["play-migration-button"].disabled = false;
-    el["play-migration-button"].innerHTML = '<span aria-hidden="true">↻</span> 重新播放迁移动画';
+    el["play-migration-button"].innerHTML = '<span aria-hidden="true">↻</span> 重新播放';
   };
 
   animationFrameId = requestAnimationFrame(frame);

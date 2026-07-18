@@ -3,221 +3,235 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="高地 AI：接收真实 HTTP 遥测、持久化证据并生成车辆安全位移 Go / No-Go 的可运行 MVP。">
-  <meta name="theme-color" content="#081826">
-  <title>高地 AI · 车辆安全位移决策服务</title>
+  <meta name="description" content="高地 AI：地下车库暴雨风险决策、证据留痕与小鹏 P5 只读提醒控制台。">
+  <meta name="theme-color" content="#17201f">
+  <title>高地 AI · 暴雨风险控制台</title>
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
   <a class="skip-link" href="#main">跳到主要内容</a>
 
   <header class="site-header">
-    <div class="brand">
-      <div class="brand-mark" aria-hidden="true">H</div>
-      <div>
-        <p class="eyebrow">XPENG PHYSICAL AI CONCEPT</p>
-        <h1>高地 AI <span>HighGround</span></h1>
+    <div class="header-inner">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">HG</div>
+        <div>
+          <h1>高地 AI</h1>
+          <p>XPENG P5 · Flood Safety Console</p>
+        </div>
       </div>
-    </div>
-    <div class="header-note">
-      <span class="live-dot" aria-hidden="true"></span>
-      可运行 MVP · API + SQLite
+      <div class="header-note">
+        <span class="live-dot" aria-hidden="true"></span>
+        场端决策节点在线
+        <span class="header-divider" aria-hidden="true"></span>
+        record-only
+      </div>
     </div>
   </header>
 
   <main id="main">
-    <section class="intro" aria-labelledby="intro-title">
+    <section class="console-heading" aria-labelledby="console-title">
       <div>
-        <p class="section-kicker">从“收到预警”到“安全上高地”</p>
-        <h2 id="intro-title">让 AI 在水到之前完成判断，<br>让车辆只在安全窗口内行动。</h2>
-        <p>连接后端后，遥测会通过真实 HTTP 接口写入 SQLite，并生成可追溯的 Go / No-Go 事件；场景图仅用于解释结果。</p>
+        <p class="section-kicker">B1 北区 · 实时态势</p>
+        <h2 id="console-title">地下车库风险控制台</h2>
       </div>
-      <div class="scenario-actions" aria-label="场景控制">
-        <label for="scenario">场景预设</label>
-        <select id="scenario">
-          <option value="normal">日常守望</option>
-          <option value="rising">暴雨快速上涨</option>
-          <option value="conflict">传感器冲突</option>
-          <option value="blocked">迁移路线受阻</option>
-          <option value="occupant">车内有人</option>
-          <option value="movingFault">移动中通信异常</option>
-        </select>
-        <button id="run-button" class="button button-primary" type="button">运行决策</button>
-        <button id="step-button" class="button" type="button">推进 1 分钟</button>
+      <dl class="console-meta">
+        <div><dt>场站</dt><dd>garage-web-01</dd></div>
+        <div><dt>车辆</dt><dd>XPENG P5</dd></div>
+        <div><dt>策略</dt><dd>v1.1 deterministic</dd></div>
+      </dl>
+    </section>
+
+    <section class="operations-grid" aria-label="当前风险与场景控制">
+      <article class="decision-panel" aria-labelledby="decision-panel-title">
+        <div class="panel-heading">
+          <div>
+            <p class="panel-label">当前决策</p>
+            <h3 id="decision-panel-title"><span id="decision-value">原地守望</span></h3>
+          </div>
+          <span id="risk-value" class="risk-badge">LOW</span>
+        </div>
+
+        <p id="decision-reason" class="decision-reason" role="status" aria-live="polite"></p>
+        <p id="permission-value" class="permission-value">权限：无需移动</p>
+
+        <div class="status-grid" aria-label="实时决策摘要">
+          <div class="status-card">
+            <span>最晚安全启动</span>
+            <strong id="latest-start-value">--</strong>
+            <small id="threshold-value">距禁行水位 -- cm</small>
+          </div>
+          <div class="status-card">
+            <span>证据质量</span>
+            <strong id="confidence-value">94%</strong>
+            <small>多源交叉校验</small>
+          </div>
+        </div>
+
+        <button id="command-button" class="button command-button" type="button" disabled>
+          验证一次性授权并记录命令
+        </button>
+        <small class="command-note">仅写入安全审计记录，不向车辆发送控制指令。</small>
+      </article>
+
+      <section class="simulator" aria-labelledby="simulator-title">
+        <div class="section-heading">
+          <div>
+            <p class="panel-label">场景解释</p>
+            <h3 id="simulator-title">车库剖面与迁移路线</h3>
+          </div>
+          <button id="play-migration-button" class="button animation-button" type="button">
+            <span aria-hidden="true">▶</span> 播放迁移
+          </button>
+        </div>
+
+        <div class="scene-wrap">
+          <svg id="garage-scene" viewBox="0 0 1000 360" role="img" aria-labelledby="scene-title scene-desc">
+            <title id="scene-title">地下车库车辆安全位移态势图</title>
+            <desc id="scene-desc">小鹏 P5 位于左侧低洼停车区，右侧坡道通往高位安全泊位，蓝色区域表示积水高度。</desc>
+            <defs>
+              <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+                <path d="M40 0H0V40" fill="none" stroke="#cfd7d4" stroke-width="1"/>
+              </pattern>
+              <clipPath id="scene-clip"><rect width="1000" height="360" rx="6"/></clipPath>
+            </defs>
+
+            <g clip-path="url(#scene-clip)">
+              <rect width="1000" height="360" fill="#f5f7f5"/>
+              <rect width="1000" height="360" fill="url(#grid)" opacity=".72"/>
+              <path d="M0 302H625L838 170H1000V360H0Z" fill="#dce2df"/>
+              <path d="M0 302H625L838 170H1000" fill="none" stroke="#657571" stroke-width="4"/>
+              <path id="migration-route" d="M162 280C350 250 540 258 720 205C780 188 824 176 880 174" fill="none" stroke="#247b78" stroke-width="4" stroke-dasharray="10 10"/>
+
+              <g id="parking-bays" fill="none" stroke="#b9c4c0" stroke-width="2">
+                <path d="M42 236V302M142 236V302M242 236V302M342 236V302M442 236V302"/>
+                <path d="M58 250H126M158 250H226M258 250H326M358 250H426" opacity=".65"/>
+              </g>
+
+              <g id="high-point" transform="translate(838 82)">
+                <rect x="0" y="0" width="126" height="82" rx="6" fill="#e4f0e9" stroke="#1e7658" stroke-width="3"/>
+                <path d="M18 64V18H108V64" fill="none" stroke="#1e7658" stroke-width="3"/>
+                <text x="63" y="51" text-anchor="middle" class="safe-letter">P</text>
+                <text x="63" y="104" text-anchor="middle">高位安全泊位</text>
+              </g>
+
+              <g id="sensor" transform="translate(74 74)">
+                <circle cx="0" cy="0" r="7" fill="#2d8fa3"/>
+                <path d="M-18-16A24 24 0 0118-16M-31-29A42 42 0 0131-29" fill="none" stroke="#2d8fa3" stroke-width="3"/>
+                <text x="0" y="36" text-anchor="middle">边缘网关</text>
+              </g>
+
+              <g id="water-group">
+                <rect id="water" x="0" y="285" width="630" height="75" fill="#73bdcb" fill-opacity=".72"/>
+                <path id="water-line" d="M0 285C80 276 145 294 220 285S360 276 440 285S550 294 630 285" fill="none" stroke="#187f96" stroke-width="3"/>
+              </g>
+
+              <g id="vehicle" transform="translate(155 235)">
+                <path id="headlight-beam" d="M154 42L250 22V70L154 56Z" fill="#e8b94f" opacity="0"/>
+                <ellipse cx="79" cy="68" rx="79" ry="10" fill="#44514e" opacity=".16"/>
+                <path d="M6 47L27 22Q36 9 56 8H108Q124 9 140 27L157 47Q164 50 164 59V65H0V55Q0 49 6 47Z" fill="#e8ecea" stroke="#293835" stroke-width="3"/>
+                <path d="M39 21H103Q115 22 130 43H22Q28 31 39 21Z" fill="#617773"/>
+                <path d="M57 22V43M108 25L101 43" stroke="#b8c8c4" stroke-width="2"/>
+                <path d="M10 51H153" stroke="#9daaa6" stroke-width="2"/>
+                <g class="wheel" transform="translate(34 66)">
+                  <circle r="14" fill="#25312f" stroke="#899794" stroke-width="4"/>
+                  <path class="wheel-spokes" d="M-7 0H7M0-7V7" stroke="#e2e7e5" stroke-width="2"/>
+                </g>
+                <g class="wheel" transform="translate(134 66)">
+                  <circle r="14" fill="#25312f" stroke="#899794" stroke-width="4"/>
+                  <path class="wheel-spokes" d="M-7 0H7M0-7V7" stroke="#e2e7e5" stroke-width="2"/>
+                </g>
+                <rect x="154" y="49" width="7" height="9" rx="2" fill="#c94c43"/>
+              </g>
+
+              <g id="scene-label" transform="translate(704 288)">
+                <rect width="252" height="44" rx="6" fill="#ffffff" stroke="#bdc8c5"/>
+                <circle id="scene-status-dot" cx="22" cy="22" r="6" fill="#1e7658"/>
+                <text id="scene-status-text" x="39" y="28">等待计算</text>
+              </g>
+              <text id="water-label" x="24" y="334">当前积水 4.0 cm</text>
+            </g>
+          </svg>
+
+          <div class="migration-hud" aria-live="polite">
+            <div class="migration-stage">
+              <span id="animation-step">等待播放</span>
+              <strong id="animation-speed">0.0 km/h</strong>
+            </div>
+            <div class="progress-track" aria-hidden="true"><span id="animation-progress"></span></div>
+            <span id="animation-percent">0%</span>
+          </div>
+        </div>
+
+        <ol class="pipeline" aria-label="物理 AI 决策闭环">
+          <li data-stage="sense"><span>01</span><b>感知</b><small>雨量 · 水位</small></li>
+          <li data-stage="predict"><span>02</span><b>预测</b><small>上涨 · 窗口</small></li>
+          <li data-stage="decide"><span>03</span><b>决策</b><small>Go / No-Go</small></li>
+          <li data-stage="act"><span>04</span><b>行动</b><small>授权 · 迁移</small></li>
+          <li data-stage="learn"><span>05</span><b>留痕</b><small>证据 · 审计</small></li>
+        </ol>
+      </section>
+
+      <aside class="control-panel" aria-label="场景与后端控制">
+        <div class="panel-heading compact-heading">
+          <div>
+            <p class="panel-label">控制</p>
+            <h3>场景与数据源</h3>
+          </div>
+        </div>
+
+        <div class="scenario-actions">
+          <label for="scenario">场景预设</label>
+          <select id="scenario">
+            <option value="normal">日常守望</option>
+            <option value="rising">暴雨快速上涨</option>
+            <option value="conflict">传感器冲突</option>
+            <option value="blocked">迁移路线受阻</option>
+            <option value="occupant">车内有人</option>
+            <option value="movingFault">移动中通信异常</option>
+          </select>
+          <button id="run-button" class="button button-primary" type="button">运行决策</button>
+          <button id="step-button" class="button" type="button">推进 1 分钟</button>
+        </div>
+
         <div class="api-connection">
           <div class="api-state">
             <span id="api-status-dot" aria-hidden="true"></span>
             <strong id="api-status">本地决策模式</strong>
           </div>
-          <label class="sr-only" for="api-key-input">后端 X-API-Key</label>
-          <input id="api-key-input" type="password" autocomplete="off" placeholder="输入后端 X-API-Key">
+          <label for="api-key-input">后端 X-API-Key</label>
+          <input id="api-key-input" type="password" autocomplete="off" placeholder="输入 API Key">
           <button id="api-connect-button" class="button" type="button">连接真实后端</button>
-          <p class="api-note">未连接时为本地演示；连接后“运行决策”会真实写库。</p>
+          <p class="api-note">连接后，运行决策会将遥测与证据写入 SQLite。</p>
         </div>
-      </div>
+      </aside>
     </section>
 
-    <section class="status-grid" aria-label="实时决策摘要">
-      <article class="status-card">
-        <span>当前决策</span>
-        <strong id="decision-value">原地守望</strong>
-        <small id="permission-value">权限：无需移动</small>
-      </article>
-      <article class="status-card">
-        <span>风险等级</span>
-        <strong id="risk-value">LOW</strong>
-        <small id="confidence-value">证据置信度 94%</small>
-      </article>
-      <article class="status-card">
-        <span>最晚安全启动</span>
-        <strong id="latest-start-value">--</strong>
-        <small id="threshold-value">距禁行水位 -- cm</small>
-      </article>
-    </section>
-
-    <section class="simulator" aria-labelledby="simulator-title">
-      <div class="section-heading">
-        <div>
-          <p class="section-kicker">车 · 场 · 云证据闭环</p>
-          <h2 id="simulator-title">实时决策与场景解释</h2>
-        </div>
-        <div class="scene-toolbar">
-          <p id="decision-reason" class="decision-reason" role="status" aria-live="polite"></p>
-          <button id="play-migration-button" class="button animation-button" type="button">
-            <span aria-hidden="true">▶</span> 播放车辆迁移动画
-          </button>
-          <button id="command-button" class="button command-button" type="button" disabled>
-            验证一次性授权并记录命令
-          </button>
-          <small class="command-note">该按钮调用真实授权与命令 API；默认安全适配器只写库，不向车辆发指令。</small>
-        </div>
+    <section class="workbench-heading" aria-labelledby="workbench-title">
+      <div>
+        <p class="section-kicker">输入与证据</p>
+        <h2 id="workbench-title">安全条件工作台</h2>
       </div>
-
-      <div class="scene-wrap">
-        <svg id="garage-scene" viewBox="0 0 1000 360" role="img" aria-labelledby="scene-title scene-desc">
-          <title id="scene-title">地下车库车辆安全位移仿真</title>
-          <desc id="scene-desc">车辆位于左侧低洼车位，右侧坡道通往高位安全点，蓝色区域表示积水高度。</desc>
-          <defs>
-            <linearGradient id="sky-gradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0" stop-color="#112c42"/>
-              <stop offset="1" stop-color="#081722"/>
-            </linearGradient>
-            <linearGradient id="water-gradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0" stop-color="#26d7e8" stop-opacity=".62"/>
-              <stop offset="1" stop-color="#087caf" stop-opacity=".82"/>
-            </linearGradient>
-            <filter id="soft-glow">
-              <feGaussianBlur stdDeviation="5" result="blur"/>
-              <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-            </filter>
-            <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#8ea4b2" stroke-opacity=".12"/>
-            </pattern>
-          </defs>
-
-          <rect width="1000" height="360" fill="url(#sky-gradient)" rx="20"/>
-          <rect width="1000" height="360" fill="url(#grid)" rx="20"/>
-          <path d="M0 302 H625 L835 170 H1000 V360 H0 Z" fill="#1d3444"/>
-          <path d="M0 302 H625 L835 170 H1000" fill="none" stroke="#b9c9d3" stroke-opacity=".7" stroke-width="4"/>
-          <path id="migration-route" d="M162 280 C350 250 540 258 720 205 C780 188 824 176 880 174" fill="none" stroke="#a5e8ef" stroke-width="4" stroke-dasharray="10 12" opacity=".75"/>
-
-          <g id="high-point" transform="translate(840 82)">
-            <path d="M0 70 L62 8 L124 70" fill="none" stroke="#55e5bb" stroke-width="5"/>
-            <path d="M23 70 V46 H101 V70" fill="#123d3b" stroke="#55e5bb" stroke-width="3"/>
-            <text x="62" y="96" text-anchor="middle">高位安全点</text>
-          </g>
-
-          <g id="sensor" transform="translate(90 76)">
-            <circle cx="0" cy="0" r="8" fill="#27d5e5" filter="url(#soft-glow)"/>
-            <path d="M-18 -17 A25 25 0 0 1 18 -17 M-31 -30 A43 43 0 0 1 31 -30" fill="none" stroke="#27d5e5" stroke-width="3" opacity=".7"/>
-            <text x="0" y="36" text-anchor="middle">车库边缘网关</text>
-          </g>
-
-          <g id="water-group">
-            <rect id="water" x="0" y="285" width="630" height="75" fill="url(#water-gradient)"/>
-            <path id="water-line" d="M0 285 C80 276 145 294 220 285 S360 276 440 285 S550 294 630 285" fill="none" stroke="#73f1ff" stroke-width="3"/>
-          </g>
-
-          <g id="vehicle" transform="translate(155 235)">
-            <path id="headlight-beam" d="M150 42 L255 19 L255 77 L150 57 Z" fill="#ffe79a" opacity="0"/>
-            <ellipse cx="76" cy="66" rx="80" ry="13" fill="#020a10" opacity=".5"/>
-            <path d="M8 45 L28 17 Q38 4 58 4 H104 Q121 5 138 23 L155 45 Q163 49 163 61 V69 H0 V55 Q0 48 8 45Z" fill="#dbe7ee" stroke="#ffffff" stroke-width="3"/>
-            <path d="M39 18 H101 Q112 18 126 41 H23 Q28 29 39 18Z" fill="#173248"/>
-            <path d="M54 19 V41 M107 22 L99 41" stroke="#7aa9c1" stroke-width="2"/>
-            <g class="wheel" transform="translate(34 68)">
-              <circle r="15" fill="#07131d" stroke="#7c909e" stroke-width="5"/>
-              <path class="wheel-spokes" d="M-8 0 H8 M0 -8 V8" stroke="#d4e0e6" stroke-width="2"/>
-            </g>
-            <g class="wheel" transform="translate(133 68)">
-              <circle r="15" fill="#07131d" stroke="#7c909e" stroke-width="5"/>
-              <path class="wheel-spokes" d="M-8 0 H8 M0 -8 V8" stroke="#d4e0e6" stroke-width="2"/>
-            </g>
-            <rect x="151" y="48" width="8" height="10" rx="3" fill="#f46a4e"/>
-          </g>
-
-          <g id="scene-label" transform="translate(720 286)">
-            <rect width="230" height="45" rx="22" fill="#0b2130" stroke="#3e5f73"/>
-            <circle id="scene-status-dot" cx="24" cy="22.5" r="6" fill="#55e5bb"/>
-            <text id="scene-status-text" x="42" y="28">等待计算</text>
-          </g>
-          <text id="water-label" x="25" y="333">当前积水 4.0 cm</text>
-        </svg>
-        <div class="migration-hud" aria-live="polite">
-          <div class="migration-stage">
-            <span id="animation-step">等待播放</span>
-            <strong id="animation-speed">0.0 km/h</strong>
-          </div>
-          <div class="progress-track" aria-hidden="true">
-            <span id="animation-progress"></span>
-          </div>
-          <span id="animation-percent">0%</span>
-        </div>
-      </div>
-
-      <ol class="pipeline" aria-label="物理 AI 决策闭环">
-        <li data-stage="sense"><span>01</span><b>感知</b><small>雨量 · 水位 · 车况</small></li>
-        <li data-stage="predict"><span>02</span><b>预测</b><small>上涨速度 · 安全窗口</small></li>
-        <li data-stage="decide"><span>03</span><b>决策</b><small>Go / No-Go</small></li>
-        <li data-stage="act"><span>04</span><b>行动</b><small>授权 · 低速迁移</small></li>
-        <li data-stage="learn"><span>05</span><b>留痕</b><small>证据 · 事件日志</small></li>
-      </ol>
+      <span>所有阈值由服务端策略控制</span>
     </section>
 
     <section class="workbench" aria-label="遥测参数与决策证据">
       <form id="control-form" class="controls" onsubmit="return false;">
         <div class="section-heading compact">
-          <div>
-            <p class="section-kicker">给定输入</p>
-            <h2>环境与安全条件</h2>
-          </div>
+          <div><p class="panel-label">遥测输入</p><h3>环境与车辆状态</h3></div>
           <button id="reset-button" class="text-button" type="button">恢复预设</button>
         </div>
 
         <div class="range-grid">
-          <label>
-            <span>降雨强度 <output id="rain-output">35 mm/h</output></span>
-            <input id="rainfall" name="rainfallMmH" type="range" min="0" max="120" step="1" value="35">
-          </label>
-          <label>
-            <span>主水位 <output id="water-output">4.0 cm</output></span>
-            <input id="water-level" name="waterLevelCm" type="range" min="0" max="30" step="0.5" value="4">
-          </label>
-          <label>
-            <span>交叉水位 <output id="water-2-output">4.0 cm</output></span>
-            <input id="secondary-water" name="secondaryWaterLevelCm" type="range" min="0" max="30" step="0.5" value="4">
-          </label>
-          <label>
-            <span>上涨速度 <output id="rise-output">0.2 cm/min</output></span>
-            <input id="rise-rate" name="riseRateCmMin" type="range" min="0" max="2" step="0.1" value="0.2">
-          </label>
-          <label>
-            <span>证据置信度 <output id="confidence-output">94%</output></span>
-            <input id="sensor-confidence" name="sensorConfidence" type="range" min="0" max="1" step="0.01" value="0.94">
-          </label>
+          <label><span>降雨强度 <output id="rain-output">35 mm/h</output></span><input id="rainfall" name="rainfallMmH" type="range" min="0" max="120" step="1" value="35"></label>
+          <label><span>主水位 <output id="water-output">4.0 cm</output></span><input id="water-level" name="waterLevelCm" type="range" min="0" max="30" step="0.5" value="4"></label>
+          <label><span>交叉水位 <output id="water-2-output">4.0 cm</output></span><input id="secondary-water" name="secondaryWaterLevelCm" type="range" min="0" max="30" step="0.5" value="4"></label>
+          <label><span>上涨速度 <output id="rise-output">0.2 cm/min</output></span><input id="rise-rate" name="riseRateCmMin" type="range" min="0" max="2" step="0.1" value="0.2"></label>
+          <label><span>证据置信度 <output id="confidence-output">94%</output></span><input id="sensor-confidence" name="sensorConfidence" type="range" min="0" max="1" step="0.01" value="0.94"></label>
         </div>
 
         <fieldset>
-          <legend>自动迁移“七道闸”与授权</legend>
+          <legend>车辆移动安全闸与授权</legend>
           <div class="gate-grid">
             <label><input id="route-dry" name="routeDry" type="checkbox" checked> 路线全程干燥</label>
             <label><input id="route-open" name="routeOpen" type="checkbox" checked> 出口与闸机可用</label>
@@ -234,17 +248,12 @@
 
       <section class="evidence" aria-labelledby="evidence-title">
         <div class="section-heading compact">
-          <div>
-            <p class="section-kicker">决策日志</p>
-            <h2 id="evidence-title">可解释证据链</h2>
-          </div>
+          <div><p class="panel-label">决策日志</p><h3 id="evidence-title">可解释证据链</h3></div>
           <span id="event-id" class="event-id">EVENT-0001</span>
         </div>
         <div class="table-wrap">
           <table>
-            <thead>
-              <tr><th>检查项</th><th>结果</th><th>证据</th></tr>
-            </thead>
+            <thead><tr><th>检查项</th><th>结果</th><th>证据</th></tr></thead>
             <tbody id="evidence-body"></tbody>
           </table>
         </div>
@@ -258,7 +267,8 @@
   </main>
 
   <footer>
-    <strong>安全边界：</strong>遥测、决策、SQLite、授权与命令留痕均真实运行；默认适配器明确不控制车辆。实车接入必须使用制造商正式接口，并完成独立安全壳、封闭场地和法规验证。
+    <div><strong>安全边界</strong><span>默认适配器仅记录命令，不控制车辆；实车接入必须使用制造商正式接口并完成封闭场地验证。</span></div>
+    <span>HighGround / XPENG P5 concept</span>
   </footer>
 
   <script type="module" src="./src/app.js"></script>
