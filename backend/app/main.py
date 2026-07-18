@@ -13,7 +13,12 @@ from fastapi.staticfiles import StaticFiles
 
 from .actuator import build_actuator
 from .config import REPO_ROOT, Settings
-from .database import Database, StoredEvent
+from .database import (
+    Database,
+    EventSupersededError,
+    MessageIdConflictError,
+    StoredEvent,
+)
 from .decision_engine import evaluate_decision
 from .models import (
     AuthorizationRequest,
@@ -29,6 +34,7 @@ from .models import (
 
 
 API_PREFIX = "/api/v1"
+LATEST_RESPONSE_HEADERS = {"Cache-Control": "private, no-store"}
 
 
 def _event_response(event: StoredEvent) -> TelemetryDecisionResponse:
@@ -51,6 +57,16 @@ def _event_detail(event: StoredEvent) -> EventDetail:
         telemetry=event.telemetry,
         result=event.result,
     )
+
+
+def _event_is_stale(
+    event: StoredEvent,
+    max_age_seconds: int,
+    *,
+    now: datetime | None = None,
+) -> bool:
+    current_time = now or datetime.now(timezone.utc)
+    return (current_time - event.received_at).total_seconds() > max_age_seconds
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -129,7 +145,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         _: str = Security(require_api_key),
     ) -> TelemetryDecisionResponse:
         result = evaluate_decision(payload, settings.policy)
-        event = database.save_telemetry_and_decision(payload, result)
+        try:
+            event = database.save_telemetry_and_decision(payload, result)
+        except MessageIdConflictError as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
         if event.duplicate:
             response.status_code = status.HTTP_200_OK
         return _event_response(event)
@@ -140,13 +159,25 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         tags=["decision"],
     )
     def latest_decision(
+        response: Response,
         site_id: str = Query(min_length=1, max_length=80),
         vehicle_id: str = Query(min_length=1, max_length=80),
         _: str = Security(require_api_key),
     ) -> EventDetail:
         event = database.get_latest(site_id, vehicle_id)
         if not event:
-            raise HTTPException(status_code=404, detail="No decision found")
+            raise HTTPException(
+                status_code=404,
+                detail="No decision found",
+                headers=LATEST_RESPONSE_HEADERS,
+            )
+        if _event_is_stale(event, settings.event_max_age_seconds):
+            raise HTTPException(
+                status_code=status.HTTP_410_GONE,
+                detail="Latest decision is stale; ingest fresh telemetry",
+                headers=LATEST_RESPONSE_HEADERS,
+            )
+        response.headers.update(LATEST_RESPONSE_HEADERS)
         return _event_detail(event)
 
     @app.get(
@@ -193,18 +224,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(status_code=409, detail="Event is not eligible for migration")
 
         now = datetime.now(timezone.utc)
-        if (now - event.received_at).total_seconds() > settings.event_max_age_seconds:
+        if _event_is_stale(event, settings.event_max_age_seconds, now=now):
             raise HTTPException(status_code=409, detail="Event is stale; ingest fresh telemetry")
 
         token = secrets.token_urlsafe(32)
         token_sha256 = hashlib.sha256(token.encode("utf-8")).hexdigest()
         expires_at = now + timedelta(seconds=settings.authorization_ttl_seconds)
-        authorization_id = database.create_authorization(
-            event_id=event.event_id,
-            owner_id=request.owner_id,
-            token_sha256=token_sha256,
-            expires_at=expires_at,
-        )
+        try:
+            authorization_id = database.create_authorization(
+                event_id=event.event_id,
+                owner_id=request.owner_id,
+                token_sha256=token_sha256,
+                expires_at=expires_at,
+            )
+        except EventSupersededError as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
         return AuthorizationResponse(
             authorization_id=authorization_id,
             event_id=event.event_id,
@@ -230,7 +264,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if not event:
             raise HTTPException(status_code=404, detail="Event not found")
         now = datetime.now(timezone.utc)
-        if (now - event.received_at).total_seconds() > settings.event_max_age_seconds:
+        if _event_is_stale(event, settings.event_max_age_seconds, now=now):
             raise HTTPException(status_code=409, detail="Event is stale; ingest fresh telemetry")
 
         reevaluated = evaluate_decision(
@@ -241,25 +275,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if reevaluated.decision != DecisionCode.MIGRATE_NOW or not reevaluated.authorized_to_move:
             raise HTTPException(status_code=409, detail="Fresh safety evaluation denied migration")
 
-        token_sha256 = hashlib.sha256(request.authorization_token.encode("utf-8")).hexdigest()
-        authorization_id = database.consume_authorization(
-            event_id=event.event_id,
-            token_sha256=token_sha256,
-            now=now,
-        )
-        if not authorization_id:
-            raise HTTPException(status_code=401, detail="Authorization is invalid, expired, or already used")
-
+        # Only the side-effect-free record-only adapter can reach this branch.
         actuator_result = actuator.migrate_to_high_point(
             event_id=event.event_id,
             vehicle_id=event.telemetry.vehicle_id,
         )
-        command_id = database.record_command(
-            event_id=event.event_id,
-            authorization_id=authorization_id,
-            status=actuator_result.status,
-            response=actuator_result.details,
-        )
+        token_sha256 = hashlib.sha256(request.authorization_token.encode("utf-8")).hexdigest()
+        try:
+            command_id = database.record_authorized_command(
+                event_id=event.event_id,
+                token_sha256=token_sha256,
+                now=now,
+                status=actuator_result.status,
+                response=actuator_result.details,
+            )
+        except EventSupersededError as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+        if not command_id:
+            raise HTTPException(status_code=401, detail="Authorization is invalid, expired, or already used")
         return CommandResponse(
             command_id=command_id,
             event_id=event.event_id,

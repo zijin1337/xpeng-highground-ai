@@ -85,4 +85,27 @@ public class HighGroundBackendClientTest {
         assertEquals(302, error.statusCode);
         assertEquals(1, server.getRequestCount());
     }
+
+    @Test
+    public void reportsGoneWhenLatestDecisionIsStale() {
+        String oversizedErrorBody = new String(new char[300 * 1024]).replace('\0', 'x');
+        server.enqueue(new MockResponse()
+                .setResponseCode(410)
+                .addHeader("Content-Type", "application/json; charset=utf-8")
+                .setBody(oversizedErrorBody));
+        BackendConfig config = new BackendConfig(
+                server.url("/").toString(),
+                API_KEY,
+                "garage-01",
+                "p5-01");
+        config.validate(true);
+
+        HighGroundBackendClient.BackendException error = assertThrows(
+                HighGroundBackendClient.BackendException.class,
+                () -> new HighGroundBackendClient().fetchLatest(config));
+
+        assertEquals(410, error.statusCode);
+        assertEquals("最新决策已过期，等待新遥测", error.getMessage());
+        assertEquals(1, server.getRequestCount());
+    }
 }

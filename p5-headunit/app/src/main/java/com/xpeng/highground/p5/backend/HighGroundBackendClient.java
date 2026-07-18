@@ -28,18 +28,19 @@ public final class HighGroundBackendClient {
             connection.setRequestProperty("User-Agent", "highground-p5/0.1");
 
             int status = connection.getResponseCode();
-            String body = readBody(status >= 200 && status < 300
-                    ? connection.getInputStream()
-                    : connection.getErrorStream());
             if (status == 404) {
                 throw new BackendException(status, "后端尚无该车辆的决策");
             }
             if (status == 401) {
                 throw new BackendException(status, "后端拒绝了 X-API-Key");
             }
+            if (status == 410) {
+                throw new BackendException(status, "最新决策已过期，等待新遥测");
+            }
             if (status < 200 || status >= 300) {
                 throw new BackendException(status, "后端返回 HTTP " + status);
             }
+            String body = readBody(connection.getInputStream());
             try {
                 return DecisionSnapshot.parse(body);
             } catch (JSONException error) {
