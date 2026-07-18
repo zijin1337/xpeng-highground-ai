@@ -1,0 +1,23 @@
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+        // Keep the mirror as a fallback for constrained mainland networks. Putting it first makes
+        // transient mirror failures (for example an HTTP 502) break otherwise healthy CI builds.
+        maven { url "https://maven.aliyun.com/repository/google" }
+    }
+}
+
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+        maven { url "https://jitpack.io" }
+        maven { url "https://maven.aliyun.com/repository/google" }
+    }
+}
+
+rootProject.name = "HighGroundP5"
+include ":app"

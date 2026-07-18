@@ -36,3 +36,23 @@ jobs:
         run: pip install -r backend/requirements-dev.txt
       - name: Run API, database, authorization and decision tests
         run: python -m pytest backend/tests -q
+
+  p5-headunit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Use Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+      - name: Install Android 33 SDK
+        run: sdkmanager "platforms;android-33" "build-tools;33.0.2"
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+      - name: Test, build and lint the P5 app
+        working-directory: p5-headunit
+        run: bash ./gradlew :app:testDebugUnitTest :app:assembleDebug :app:lintDebug --no-daemon

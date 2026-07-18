@@ -13,3 +13,6 @@ coverage/
 data/*.db
 data/*.db-*
 *.log
+p5-headunit/.gradle/
+p5-headunit/local.properties
+p5-headunit/**/build/

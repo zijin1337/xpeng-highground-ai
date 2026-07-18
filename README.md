@@ -218,6 +218,7 @@ xpeng-highground-ai/
 ├─ src/
 │  ├─ app.js                   # UI、API 连接和本地降级演示
 │  └─ decision-engine.js       # 浏览器内解释型引擎
+├─ p5-headunit/                # 可安装到小鹏 P5 的 Android 只读监控与座舱提醒应用
 ├─ Dockerfile
 ├─ docker-compose.yml
 ├─ index.html
@@ -228,7 +229,21 @@ xpeng-highground-ai/
 
 GitHub Pages 地址只能运行静态界面和浏览器演示，因为 Pages 不能运行 Python 或 SQLite。要使用真实遥测、数据库、授权和命令接口，必须用 Docker/本地 Python 启动本仓库，或把容器部署到支持后端服务的平台。
 
-## 实车接入还缺什么
+## 小鹏 P5 车端
+
+[`p5-headunit/`](./p5-headunit/) 是独立 Android 工程，按 Open-Xpeng 社区 P5 XUI SDK
+`1.0.2` 的实际类定义编译。它能在车机上监听车速、原始挡位码和天气事件，轮询本后端的最新决策，
+并调用小 P 语音和环境灯提醒。XUI 运行时或系统权限不可用时会明确降级并定期重新探测，不会崩溃或伪造成功。
+车端拒绝后端重定向和未知决策码，避免 API Key 泄露或把不兼容响应误判为安全状态。
+
+```powershell
+cd p5-headunit
+.\gradlew.bat :app:testDebugUnitTest :app:assembleDebug :app:lintDebug
+```
+
+完整构建、安装、联调和上车验证说明见 [`p5-headunit/README.md`](./p5-headunit/README.md)。
+
+## 车辆自动移动接入还缺什么
 
 仓库故意没有虚构“小鹏车辆移动 API”。真正接车至少需要：
 
