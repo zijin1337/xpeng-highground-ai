@@ -4,9 +4,18 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public final class DecisionSnapshot {
     private static final int MAX_EVENT_ID_LENGTH = 128;
+    // Client-side bounds protect the UI and memory; backend business rules remain authoritative.
+    private static final int MAX_RECEIVED_AT_LENGTH = 64;
+    private static final int MAX_LABEL_LENGTH = 160;
+    private static final int MAX_REASON_LENGTH = 2_000;
+    private static final Pattern ISO_8601_TIMESTAMP = Pattern.compile(
+            "^(\\d{4})-(\\d{2})-(\\d{2})T(\\d{2}):(\\d{2}):(\\d{2})"
+                    + "(?:\\.\\d{1,9})?(?:Z|([+-])(\\d{2}):(\\d{2}))$");
 
     public final String eventId;
     public final String receivedAt;
@@ -44,6 +53,9 @@ public final class DecisionSnapshot {
         String eventId = root.getString("event_id").trim();
         String decision = result.getString("decision").trim();
         String riskLevel = result.getString("risk_level").trim();
+        String receivedAt = optionalString(root, "received_at", "", MAX_RECEIVED_AT_LENGTH);
+        String label = optionalString(result, "label", decision, MAX_LABEL_LENGTH);
+        String reason = optionalString(result, "reason", "", MAX_REASON_LENGTH);
         if (eventId.isEmpty() || eventId.length() > MAX_EVENT_ID_LENGTH) {
             throw new JSONException("event_id 长度无效");
         }
@@ -53,6 +65,7 @@ public final class DecisionSnapshot {
         if (!isKnownRiskLevel(riskLevel)) {
             throw new JSONException("未知 risk_level：" + riskLevel);
         }
+        validateReceivedAt(receivedAt);
         double rainfall = environment == null
                 ? Double.NaN
                 : environment.optDouble("rainfall_mm_h", Double.NaN);
@@ -63,11 +76,11 @@ public final class DecisionSnapshot {
         validateReading("water_level_cm", waterLevel, 300);
         return new DecisionSnapshot(
                 eventId,
-                root.optString("received_at", ""),
+                receivedAt,
                 decision,
-                result.optString("label", decision),
+                label,
                 riskLevel,
-                result.optString("reason", ""),
+                reason,
                 rainfall,
                 waterLevel);
     }
@@ -109,6 +122,71 @@ public final class DecisionSnapshot {
         if (!Double.isNaN(value)
                 && (Double.isInfinite(value) || value < 0 || value > maximum)) {
             throw new JSONException(name + " 超出后端协议范围");
+        }
+    }
+
+    private static String optionalString(
+            JSONObject object,
+            String name,
+            String fallback,
+            int maximumLength) throws JSONException {
+        Object value = object.opt(name);
+        if (value == null || value == JSONObject.NULL) {
+            return fallback;
+        }
+        if (!(value instanceof String)) {
+            throw new JSONException(name + " 必须是字符串");
+        }
+        String text = ((String) value).trim();
+        if (text.length() > maximumLength) {
+            throw new JSONException(name + " 过长");
+        }
+        return text.isEmpty() && !fallback.isEmpty() ? fallback : text;
+    }
+
+    private static void validateReceivedAt(String value) throws JSONException {
+        if (value.isEmpty()) {
+            return;
+        }
+        Matcher matcher = ISO_8601_TIMESTAMP.matcher(value);
+        if (!matcher.matches()) {
+            throw new JSONException("received_at 不是带时区的 ISO-8601 时间");
+        }
+        int year = integer(matcher, 1);
+        int month = integer(matcher, 2);
+        int day = integer(matcher, 3);
+        int hour = integer(matcher, 4);
+        int minute = integer(matcher, 5);
+        int second = integer(matcher, 6);
+        if (year < 1 || month < 1 || month > 12 || day < 1
+                || day > daysInMonth(year, month) || hour > 23 || minute > 59 || second > 59) {
+            throw new JSONException("received_at 日期或时间无效");
+        }
+        if (matcher.group(7) != null) {
+            int offsetHour = integer(matcher, 8);
+            int offsetMinute = integer(matcher, 9);
+            if (offsetHour > 18 || offsetMinute > 59
+                    || (offsetHour == 18 && offsetMinute != 0)) {
+                throw new JSONException("received_at 时区偏移无效");
+            }
+        }
+    }
+
+    private static int integer(Matcher matcher, int group) {
+        return Integer.parseInt(matcher.group(group));
+    }
+
+    private static int daysInMonth(int year, int month) {
+        switch (month) {
+            case 2:
+                return (year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)) ? 29 : 28;
+            case 4:
+            case 6:
+            case 9:
+            case 11:
+                return 30;
+            default:
+                return 31;
         }
     }
 }

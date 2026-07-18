@@ -1,5 +1,7 @@
 package com.xpeng.highground.p5.monitor;
 
+import com.xpeng.highground.p5.backend.DecisionSnapshot;
+
 public final class MonitorUiState {
     public final boolean monitoring;
     public final String monitorStatus;
@@ -7,7 +9,7 @@ public final class MonitorUiState {
     public final Float speedKmh;
     public final Integer rawGearCode;
     public final String weather;
-    public final String decisionStatus;
+    public final DecisionSnapshot latestDecision;
 
     public MonitorUiState(
             boolean monitoring,
@@ -16,13 +18,13 @@ public final class MonitorUiState {
             Float speedKmh,
             Integer rawGearCode,
             String weather,
-            String decisionStatus) {
+            DecisionSnapshot latestDecision) {
         this.monitoring = monitoring;
         this.monitorStatus = monitorStatus;
         this.xuiStatus = xuiStatus;
         this.speedKmh = speedKmh;
         this.rawGearCode = rawGearCode;
         this.weather = weather;
-        this.decisionStatus = decisionStatus;
+        this.latestDecision = latestDecision;
     }
 }

@@ -56,3 +56,11 @@ jobs:
       - name: Test, build and lint the P5 app
         working-directory: p5-headunit
         run: bash ./gradlew :app:testDebugUnitTest :app:assembleDebug :app:lintDebug --no-daemon
+      - name: Upload unsigned P5 debug APK
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: highground-p5-debug-apk
+          path: p5-headunit/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
