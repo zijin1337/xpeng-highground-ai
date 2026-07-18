@@ -1,6 +1,22 @@
 <resources>
-    <color name="highground_blue">#1677FF</color>
-    <color name="highground_dark">#132238</color>
-    <color name="highground_surface">#F4F7FB</color>
-    <color name="highground_warning">#B54708</color>
+    <color name="highground_header">#173A3B</color>
+    <color name="highground_on_header">#FFFFFF</color>
+    <color name="highground_header_secondary">#C7DDDB</color>
+    <color name="highground_accent">#087A70</color>
+    <color name="highground_accent_pressed">#075F58</color>
+    <color name="highground_surface">#F2F5F4</color>
+    <color name="highground_panel">#FFFFFF</color>
+    <color name="highground_text">#183033</color>
+    <color name="highground_text_secondary">#40575A</color>
+    <color name="highground_muted">#6A7F81</color>
+    <color name="highground_border">#D7E1DF</color>
+    <color name="highground_disabled">#B8C5C3</color>
+    <color name="highground_low">#1E7147</color>
+    <color name="highground_low_surface">#E8F5ED</color>
+    <color name="highground_medium">#8A6200</color>
+    <color name="highground_medium_surface">#FFF4D6</color>
+    <color name="highground_high">#A4480B</color>
+    <color name="highground_high_surface">#FFF0E5</color>
+    <color name="highground_critical">#B42318</color>
+    <color name="highground_critical_surface">#FDECEA</color>
 </resources>

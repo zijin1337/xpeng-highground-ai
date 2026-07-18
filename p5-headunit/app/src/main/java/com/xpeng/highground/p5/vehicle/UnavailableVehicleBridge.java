@@ -20,6 +20,11 @@ final class UnavailableVehicleBridge implements VehicleBridge {
     }
 
     @Override
+    public boolean needsReconnect() {
+        return true;
+    }
+
+    @Override
     public String capabilityStatus() {
         return reason;
     }

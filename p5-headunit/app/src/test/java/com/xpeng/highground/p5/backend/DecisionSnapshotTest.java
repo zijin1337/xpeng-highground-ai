@@ -53,4 +53,52 @@ public class DecisionSnapshotTest {
 
         assertThrows(JSONException.class, () -> DecisionSnapshot.parse(json));
     }
+
+    @Test
+    public void rejectsOversizedUiText() {
+        String json = "{"
+                + "\"event_id\":\"evt_long_reason\","
+                + "\"result\":{"
+                + "\"decision\":\"WATCH\","
+                + "\"risk_level\":\"MEDIUM\","
+                + "\"reason\":\"" + repeat('a', 2_001) + "\""
+                + "}}";
+
+        assertThrows(JSONException.class, () -> DecisionSnapshot.parse(json));
+    }
+
+    @Test
+    public void rejectsInvalidOrTimezoneFreeReceivedAt() {
+        String invalidDay = validResponseWithReceivedAt("2026-02-30T01:02:03Z");
+        String noTimezone = validResponseWithReceivedAt("2026-07-18T01:02:03");
+
+        assertThrows(JSONException.class, () -> DecisionSnapshot.parse(invalidDay));
+        assertThrows(JSONException.class, () -> DecisionSnapshot.parse(noTimezone));
+    }
+
+    @Test
+    public void acceptsBackendMicrosecondsAndUtcOffset() throws Exception {
+        DecisionSnapshot snapshot = DecisionSnapshot.parse(
+                validResponseWithReceivedAt("2026-07-18T12:06:06.231837+00:00"));
+
+        assertEquals("2026-07-18T12:06:06.231837+00:00", snapshot.receivedAt);
+    }
+
+    private static String validResponseWithReceivedAt(String receivedAt) {
+        return "{"
+                + "\"event_id\":\"evt_time\","
+                + "\"received_at\":\"" + receivedAt + "\","
+                + "\"result\":{"
+                + "\"decision\":\"STAY\","
+                + "\"risk_level\":\"LOW\""
+                + "}}";
+    }
+
+    private static String repeat(char value, int count) {
+        StringBuilder result = new StringBuilder(count);
+        for (int index = 0; index < count; index++) {
+            result.append(value);
+        }
+        return result.toString();
+    }
 }

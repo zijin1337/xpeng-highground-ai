@@ -96,6 +96,14 @@ public final class XpengP5Bridge implements VehicleBridge {
     }
 
     @Override
+    public synchronized boolean needsReconnect() {
+        return !VehicleBridge.hasAllCapabilities(
+                registered,
+                smartManager != null,
+                ambientLightManager != null);
+    }
+
+    @Override
     public synchronized String capabilityStatus() {
         return status;
     }

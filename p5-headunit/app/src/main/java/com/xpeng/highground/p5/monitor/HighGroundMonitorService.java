@@ -65,7 +65,7 @@ public final class HighGroundMonitorService extends Service {
     private volatile Float speedKmh;
     private volatile Integer rawGearCode;
     private volatile String weather = "—";
-    private volatile String decisionStatus = "服务端决策：尚无";
+    private volatile DecisionSnapshot latestDecision;
     private volatile String lastEventId;
     private volatile boolean warningLightWanted;
 
@@ -135,12 +135,21 @@ public final class HighGroundMonitorService extends Service {
 
     public synchronized void startMonitoring(BackendConfig config) {
         config.validate(com.xpeng.highground.p5.BuildConfig.DEBUG);
+        BackendConfig previousConfig = backendConfig;
+        boolean targetChanged = previousConfig == null
+                || !previousConfig.apiBaseUrl.equals(config.apiBaseUrl)
+                || !previousConfig.apiKey.equals(config.apiKey)
+                || !previousConfig.siteId.equals(config.siteId)
+                || !previousConfig.vehicleId.equals(config.vehicleId);
+        if (!monitoring || targetChanged) {
+            latestDecision = null;
+            lastEventId = null;
+        }
         backendConfig = config;
         setMonitorEnabled(true);
         queueVehicleReconnectIfNeeded();
         if (!monitoring) {
             monitoring = true;
-            lastEventId = null;
             monitorStatus = "监控已启动，每 " + POLL_SECONDS + " 秒读取一次服务端决策";
             startForeground(NOTIFICATION_ID, buildNotification(monitorStatus));
             pollFuture = executor.scheduleWithFixedDelay(
@@ -240,7 +249,7 @@ public final class HighGroundMonitorService extends Service {
                 speedKmh,
                 rawGearCode,
                 weather,
-                decisionStatus);
+                latestDecision);
     }
 
     private void pollOnce() {
@@ -255,9 +264,8 @@ public final class HighGroundMonitorService extends Service {
             if (!monitoring || configSnapshot != backendConfig) {
                 return;
             }
-            decisionStatus = "服务端决策：" + snapshot.displayText()
-                    + (snapshot.receivedAt.isEmpty() ? "" : "\n接收时间：" + snapshot.receivedAt);
-            monitorStatus = "后端连接正常，最近事件 " + snapshot.eventId;
+            latestDecision = snapshot;
+            monitorStatus = "后端连接正常，已获取最新决策";
             if (!snapshot.eventId.equals(lastEventId)) {
                 applyNewDecision(snapshot);
                 lastEventId = snapshot.eventId;
@@ -277,17 +285,32 @@ public final class HighGroundMonitorService extends Service {
     private void applyNewDecision(DecisionSnapshot snapshot) {
         AlertPolicy.AlertAction action = AlertPolicy.evaluate(snapshot);
         warningLightWanted = action.warningLight;
+        String lightFailure = null;
+        String voiceFailure = null;
         try {
             vehicleBridge.setWarningLighting(action.warningLight);
         } catch (VehicleBridge.VehicleBridgeException error) {
-            monitorStatus += "；灯光提醒不可用：" + error.getMessage();
+            lightFailure = error.getMessage();
         }
         if (action.voicePriority != AlertPolicy.VoicePriority.NONE) {
             try {
                 vehicleBridge.speak(action.voicePriority, action.message);
             } catch (VehicleBridge.VehicleBridgeException error) {
-                monitorStatus += "；语音提醒不可用：" + error.getMessage();
+                voiceFailure = error.getMessage();
             }
+        }
+        if (lightFailure != null && voiceFailure != null) {
+            monitorStatus += "；灯光和语音提醒不可用";
+            xuiStatus = lightFailure.equals(voiceFailure)
+                    ? "P5 XUI：灯光和语音提醒失败：" + lightFailure
+                    : "P5 XUI：灯光提醒失败：" + lightFailure
+                            + "；语音提醒失败：" + voiceFailure;
+        } else if (lightFailure != null) {
+            monitorStatus += "；灯光提醒不可用";
+            xuiStatus = "P5 XUI：灯光提醒失败：" + lightFailure;
+        } else if (voiceFailure != null) {
+            monitorStatus += "；语音提醒不可用";
+            xuiStatus = "P5 XUI：语音提醒失败：" + voiceFailure;
         }
     }
 
@@ -337,7 +360,7 @@ public final class HighGroundMonitorService extends Service {
         VehicleBridge bridge = vehicleBridge;
         long elapsedMs = SystemClock.elapsedRealtime() - lastVehicleConnectAttemptMs;
         if (destroyed
-                || (bridge != null && bridge.isAvailable())
+                || (bridge != null && !bridge.needsReconnect())
                 || elapsedMs < TimeUnit.SECONDS.toMillis(VEHICLE_RECONNECT_SECONDS)
                 || !vehicleReconnectQueued.compareAndSet(false, true)) {
             return;

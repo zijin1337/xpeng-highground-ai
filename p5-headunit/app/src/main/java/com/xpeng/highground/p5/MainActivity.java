@@ -18,6 +18,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.xpeng.highground.p5.backend.BackendConfig;
+import com.xpeng.highground.p5.backend.DecisionSnapshot;
 import com.xpeng.highground.p5.monitor.HighGroundMonitorService;
 import com.xpeng.highground.p5.monitor.MonitorUiState;
 
@@ -30,13 +31,27 @@ public final class MainActivity extends Activity {
     private EditText apiKey;
     private EditText siteId;
     private EditText vehicleId;
+    private View decisionPanel;
+    private View configPanel;
+    private TextView monitorBadge;
+    private TextView decisionLabel;
+    private TextView riskBadge;
+    private TextView decisionReason;
+    private TextView waterValue;
+    private TextView rainValue;
+    private TextView receivedTime;
     private TextView monitorStatus;
     private TextView xuiStatus;
-    private TextView vehicleStatus;
-    private TextView decisionStatus;
+    private TextView speedValue;
+    private TextView gearValue;
+    private TextView weatherValue;
+    private Button refreshButton;
+    private Button configToggle;
+    private Button stopButton;
     private HighGroundMonitorService service;
     private HighGroundMonitorService.LocalBinder serviceBinder;
     private boolean bound;
+    private boolean monitoring;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -46,16 +61,37 @@ public final class MainActivity extends Activity {
         apiKey = findViewById(R.id.api_key);
         siteId = findViewById(R.id.site_id);
         vehicleId = findViewById(R.id.vehicle_id);
+        decisionPanel = findViewById(R.id.decision_panel);
+        configPanel = findViewById(R.id.config_panel);
+        monitorBadge = findViewById(R.id.monitor_badge);
+        decisionLabel = findViewById(R.id.decision_label);
+        riskBadge = findViewById(R.id.risk_badge);
+        decisionReason = findViewById(R.id.decision_reason);
+        waterValue = findViewById(R.id.water_value);
+        rainValue = findViewById(R.id.rain_value);
+        receivedTime = findViewById(R.id.received_time);
         monitorStatus = findViewById(R.id.monitor_status);
         xuiStatus = findViewById(R.id.xui_status);
-        vehicleStatus = findViewById(R.id.vehicle_status);
-        decisionStatus = findViewById(R.id.decision_status);
+        speedValue = findViewById(R.id.speed_value);
+        gearValue = findViewById(R.id.gear_value);
+        weatherValue = findViewById(R.id.weather_value);
+        refreshButton = findViewById(R.id.refresh_now);
+        configToggle = findViewById(R.id.config_toggle);
+        stopButton = findViewById(R.id.stop_monitor);
 
         loadForm();
         ((Button) findViewById(R.id.start_monitor)).setOnClickListener(view -> startMonitor());
-        ((Button) findViewById(R.id.stop_monitor)).setOnClickListener(view -> stopMonitor());
-        ((Button) findViewById(R.id.refresh_now)).setOnClickListener(view ->
-                withService(HighGroundMonitorService::refreshNow));
+        stopButton.setOnClickListener(view -> stopMonitor());
+        refreshButton.setOnClickListener(view -> {
+            if (monitoring) {
+                withService(HighGroundMonitorService::refreshNow);
+            } else {
+                startMonitor();
+            }
+        });
+        stopButton.setEnabled(false);
+        configToggle.setOnClickListener(view ->
+                setConfigExpanded(configPanel.getVisibility() != View.VISIBLE));
         ((Button) findViewById(R.id.test_voice)).setOnClickListener(view ->
                 withService(HighGroundMonitorService::testVoice));
         ((Button) findViewById(R.id.test_light)).setOnClickListener(view ->
@@ -108,6 +144,7 @@ public final class MainActivity extends Activity {
         } else {
             startService(intent);
         }
+        setConfigExpanded(false);
         toast(BuildConfig.DEBUG && config.apiBaseUrl.startsWith("http://")
                 ? "监控已启动；当前是允许明文 HTTP 的调试版"
                 : "监控已启动");
@@ -144,21 +181,112 @@ public final class MainActivity extends Activity {
         vehicleId.setText(prefs.getString(
                 HighGroundMonitorService.KEY_VEHICLE_ID,
                 "vehicle-demo-01"));
+        setConfigExpanded(apiUrl.getText().toString().trim().isEmpty());
     }
 
     private void render(MonitorUiState state) {
+        monitoring = state.monitoring;
+        monitorBadge.setText(state.monitoring
+                ? R.string.monitor_active
+                : R.string.monitor_inactive);
+        monitorBadge.setBackgroundResource(state.monitoring
+                ? R.drawable.bg_badge_active
+                : R.drawable.bg_badge_inactive);
+        refreshButton.setText(state.monitoring
+                ? R.string.refresh_now
+                : R.string.start_monitor);
+        stopButton.setEnabled(state.monitoring);
         monitorStatus.setText(state.monitorStatus);
         xuiStatus.setText(state.xuiStatus);
         String speed = state.speedKmh == null
                 ? "—"
                 : String.format(Locale.US, "%.1f", state.speedKmh);
         String gear = state.rawGearCode == null ? "—" : String.valueOf(state.rawGearCode);
-        vehicleStatus.setText(getString(
-                R.string.vehicle_status_format,
-                speed,
-                gear,
-                state.weather));
-        decisionStatus.setText(state.decisionStatus);
+        speedValue.setText(getString(R.string.speed_format, speed));
+        gearValue.setText(gear);
+        weatherValue.setText(state.weather == null || state.weather.trim().isEmpty()
+                ? "—"
+                : state.weather);
+        renderDecision(state.latestDecision);
+    }
+
+    private void renderDecision(DecisionSnapshot snapshot) {
+        if (snapshot == null) {
+            decisionPanel.setBackgroundResource(R.drawable.bg_decision_neutral);
+            decisionLabel.setText(R.string.decision_waiting);
+            decisionReason.setText(R.string.decision_reason_empty);
+            riskBadge.setText(R.string.risk_waiting);
+            riskBadge.setTextColor(getColor(R.color.highground_muted));
+            riskBadge.setBackgroundResource(R.drawable.bg_risk_neutral);
+            waterValue.setText(R.string.metric_water_empty);
+            rainValue.setText(R.string.metric_rain_empty);
+            receivedTime.setText(R.string.received_time_empty);
+            return;
+        }
+
+        decisionLabel.setText(snapshot.label);
+        decisionReason.setText(snapshot.reason.isEmpty()
+                ? getString(R.string.decision_reason_missing)
+                : snapshot.reason);
+        waterValue.setText(getString(
+                R.string.metric_water_format,
+                formatReading(snapshot.waterLevelCm)));
+        rainValue.setText(getString(
+                R.string.metric_rain_format,
+                formatReading(snapshot.rainfallMmH)));
+        receivedTime.setText(snapshot.receivedAt.isEmpty()
+                ? getString(R.string.received_event_format, snapshot.eventId)
+                : getString(R.string.received_time_format, snapshot.receivedAt));
+        renderRisk(snapshot.riskLevel);
+    }
+
+    private void renderRisk(String riskLevel) {
+        int label;
+        int panel;
+        int badge;
+        int color;
+        switch (riskLevel) {
+            case "LOW":
+                label = R.string.risk_low;
+                panel = R.drawable.bg_decision_low;
+                badge = R.drawable.bg_risk_low;
+                color = R.color.highground_low;
+                break;
+            case "MEDIUM":
+                label = R.string.risk_medium;
+                panel = R.drawable.bg_decision_medium;
+                badge = R.drawable.bg_risk_medium;
+                color = R.color.highground_medium;
+                break;
+            case "HIGH":
+                label = R.string.risk_high;
+                panel = R.drawable.bg_decision_high;
+                badge = R.drawable.bg_risk_high;
+                color = R.color.highground_high;
+                break;
+            case "CRITICAL":
+            default:
+                label = R.string.risk_critical;
+                panel = R.drawable.bg_decision_critical;
+                badge = R.drawable.bg_risk_critical;
+                color = R.color.highground_critical;
+                break;
+        }
+        decisionPanel.setBackgroundResource(panel);
+        riskBadge.setText(label);
+        riskBadge.setTextColor(getColor(color));
+        riskBadge.setBackgroundResource(badge);
+    }
+
+    private static String formatReading(double value) {
+        return Double.isNaN(value) ? "—" : String.format(Locale.US, "%.1f", value);
+    }
+
+    private void setConfigExpanded(boolean expanded) {
+        configPanel.setVisibility(expanded ? View.VISIBLE : View.GONE);
+        configToggle.setText(expanded
+                ? R.string.hide_connection_settings
+                : R.string.show_connection_settings);
     }
 
     private void withService(ServiceAction action) {

@@ -7,6 +7,16 @@ public interface VehicleBridge {
 
     boolean isAvailable();
 
+    /** Returns true while one or more requested XUI capabilities are still unavailable. */
+    boolean needsReconnect();
+
+    static boolean hasAllCapabilities(
+            boolean statusReading,
+            boolean voiceAlerts,
+            boolean lightingAlerts) {
+        return statusReading && voiceAlerts && lightingAlerts;
+    }
+
     String capabilityStatus();
 
     void speak(AlertPolicy.VoicePriority priority, String text) throws VehicleBridgeException;
