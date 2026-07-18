@@ -39,6 +39,7 @@ public final class HighGroundMonitorService extends Service {
     public static final String KEY_SITE_ID = "site_id";
     public static final String KEY_VEHICLE_ID = "vehicle_id";
     public static final String KEY_MONITOR_ENABLED = "monitor_enabled";
+    private static final String KEY_WARNING_LIGHT_WANTED = "warning_light_wanted";
 
     private static final String CHANNEL_ID = "highground_monitor";
     private static final int NOTIFICATION_ID = 7105;
@@ -90,14 +91,17 @@ public final class HighGroundMonitorService extends Service {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         String action = intent == null ? null : intent.getAction();
+        SharedPreferences preferences = getSharedPreferences(PREFS, MODE_PRIVATE);
         if (ACTION_STOP.equals(action)) {
             stopMonitoring();
             return START_NOT_STICKY;
         }
         if (ACTION_START.equals(action)
-                || getSharedPreferences(PREFS, MODE_PRIVATE)
-                .getBoolean(KEY_MONITOR_ENABLED, false)) {
+                || preferences.getBoolean(KEY_MONITOR_ENABLED, false)) {
             try {
+                warningLightWanted = preferences.getBoolean(
+                        KEY_WARNING_LIGHT_WANTED,
+                        false);
                 startMonitoring(loadConfig());
             } catch (IllegalArgumentException error) {
                 monitorStatus = "配置无效：" + error.getMessage();
@@ -150,6 +154,7 @@ public final class HighGroundMonitorService extends Service {
         queueVehicleReconnectIfNeeded();
         if (!monitoring) {
             monitoring = true;
+            queueWarningLightingRestore(vehicleBridge);
             monitorStatus = "监控已启动，每 " + POLL_SECONDS + " 秒读取一次服务端决策";
             startForeground(NOTIFICATION_ID, buildNotification(monitorStatus));
             pollFuture = executor.scheduleWithFixedDelay(
@@ -173,12 +178,14 @@ public final class HighGroundMonitorService extends Service {
             boolean disablePersistentMonitoring) {
         monitoring = false;
         backendConfig = null;
-        warningLightWanted = false;
+        if (disablePersistentMonitoring) {
+            setWarningLightWanted(false);
+        }
         if (pollFuture != null) {
             pollFuture.cancel(false);
             pollFuture = null;
         }
-        if (vehicleBridge != null) {
+        if (vehicleBridge != null && disablePersistentMonitoring) {
             try {
                 vehicleBridge.setWarningLighting(false);
             } catch (VehicleBridge.VehicleBridgeException ignored) {
@@ -261,20 +268,39 @@ public final class HighGroundMonitorService extends Service {
         }
         try {
             DecisionSnapshot snapshot = backendClient.fetchLatest(configSnapshot);
-            if (!monitoring || configSnapshot != backendConfig) {
-                return;
+            synchronized (this) {
+                if (!monitoring || configSnapshot != backendConfig) {
+                    return;
+                }
+                latestDecision = snapshot;
+                monitorStatus = "后端连接正常，已获取最新决策";
+                if (!snapshot.eventId.equals(lastEventId)) {
+                    applyNewDecision(snapshot);
+                    lastEventId = snapshot.eventId;
+                }
+                updateNotification("最近决策：" + snapshot.label + " / " + snapshot.riskLevel);
             }
-            latestDecision = snapshot;
-            monitorStatus = "后端连接正常，已获取最新决策";
-            if (!snapshot.eventId.equals(lastEventId)) {
-                applyNewDecision(snapshot);
-                lastEventId = snapshot.eventId;
+        } catch (HighGroundBackendClient.BackendException error) {
+            synchronized (this) {
+                if (monitoring && configSnapshot == backendConfig) {
+                    if (error.statusCode == 410) {
+                        latestDecision = null;
+                        lastEventId = null;
+                        // Stale data is unknown, not safe; retain the warning-light intent.
+                        monitorStatus = "最新决策已过期，等待新遥测";
+                        updateNotification("决策已过期，等待新遥测");
+                    } else {
+                        monitorStatus = "读取后端失败：" + safeMessage(error);
+                        updateNotification("连接异常，等待下次重试");
+                    }
+                }
             }
-            updateNotification("最近决策：" + snapshot.label + " / " + snapshot.riskLevel);
         } catch (Exception error) {
-            if (monitoring && configSnapshot == backendConfig) {
-                monitorStatus = "读取后端失败：" + safeMessage(error);
-                updateNotification("连接异常，等待下次重试");
+            synchronized (this) {
+                if (monitoring && configSnapshot == backendConfig) {
+                    monitorStatus = "读取后端失败：" + safeMessage(error);
+                    updateNotification("连接异常，等待下次重试");
+                }
             }
         } finally {
             pollInProgress.set(false);
@@ -284,7 +310,7 @@ public final class HighGroundMonitorService extends Service {
 
     private void applyNewDecision(DecisionSnapshot snapshot) {
         AlertPolicy.AlertAction action = AlertPolicy.evaluate(snapshot);
-        warningLightWanted = action.warningLight;
+        setWarningLightWanted(action.warningLight);
         String lightFailure = null;
         String voiceFailure = null;
         try {
@@ -330,6 +356,14 @@ public final class HighGroundMonitorService extends Service {
                 .apply();
     }
 
+    private void setWarningLightWanted(boolean wanted) {
+        warningLightWanted = wanted;
+        getSharedPreferences(PREFS, MODE_PRIVATE)
+                .edit()
+                .putBoolean(KEY_WARNING_LIGHT_WANTED, wanted)
+                .apply();
+    }
+
     private void connectVehicleBridge() {
         if (destroyed) {
             return;
@@ -342,18 +376,30 @@ public final class HighGroundMonitorService extends Service {
         VehicleBridge replacement = VehicleBridgeFactory.create();
         vehicleBridge = replacement;
         replacement.connect(vehicleListener);
-        if (replacement.isAvailable() && warningLightWanted && executor != null) {
-            executor.execute(() -> {
-                if (!destroyed && vehicleBridge == replacement && warningLightWanted) {
-                    try {
-                        replacement.setWarningLighting(true);
-                    } catch (VehicleBridge.VehicleBridgeException error) {
-                        xuiStatus = "P5 XUI：重连后恢复灯光提醒失败：" + error.getMessage();
-                        publish();
-                    }
-                }
-            });
+        queueWarningLightingRestore(replacement);
+    }
+
+    private void queueWarningLightingRestore(VehicleBridge bridge) {
+        if (!monitoring
+                || bridge == null
+                || !bridge.isAvailable()
+                || !warningLightWanted
+                || executor == null) {
+            return;
         }
+        executor.execute(() -> {
+            if (!destroyed
+                    && monitoring
+                    && vehicleBridge == bridge
+                    && warningLightWanted) {
+                try {
+                    bridge.setWarningLighting(true);
+                } catch (VehicleBridge.VehicleBridgeException error) {
+                    xuiStatus = "P5 XUI：重连后恢复灯光提醒失败：" + error.getMessage();
+                    publish();
+                }
+            }
+        });
     }
 
     private void queueVehicleReconnectIfNeeded() {

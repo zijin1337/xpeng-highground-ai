@@ -4,6 +4,12 @@ import {
   evaluateDecision,
   formatMinutes,
 } from "./decision-engine.js";
+import {
+  classifyApiFailure,
+  commandRequestCanContinue,
+  nextRequestGeneration,
+  telemetryResponseState,
+} from "./app-request-state.js";
 
 const SCENARIOS = Object.freeze({
   normal: {
@@ -83,12 +89,15 @@ let vehicleAtHighPoint = false;
 let apiMode = false;
 let apiKey = "";
 let currentServerEventId = null;
+let telemetryRequestGeneration = 0;
+let commandRequestGeneration = 0;
 
 function setCheckbox(element, checked) {
   element.checked = Boolean(checked);
 }
 
 function applyScenario(key) {
+  if (apiMode) invalidatePendingTelemetry();
   cancelMigrationAnimation({ resetVehicle: true });
   activeScenario = { ...(SCENARIOS[key] ?? SCENARIOS.normal) };
   el.rainfall.value = activeScenario.rainfallMmH;
@@ -271,6 +280,7 @@ function runDecision() {
 }
 
 function stepOneMinute() {
+  if (apiMode) invalidatePendingTelemetry();
   cancelMigrationAnimation({ resetVehicle: true });
   const rise = Number(el["rise-rate"].value);
   el["water-level"].value = Math.min(30, Number(el["water-level"].value) + rise);
@@ -411,6 +421,22 @@ function setApiStatus(state, text) {
   el["api-status"].textContent = text;
 }
 
+function responseDetail(text) {
+  try {
+    const payload = JSON.parse(text);
+    if (typeof payload.detail === "string") return payload.detail;
+  } catch {
+    // Keep plain-text responses as-is.
+  }
+  return text;
+}
+
+async function apiFailureFromResponse(response, operation) {
+  const detail = responseDetail(await response.text());
+  const classification = classifyApiFailure(operation, response.status, detail);
+  return Object.assign(new Error(classification.message), classification);
+}
+
 function updateCommandAvailability() {
   const eligible = apiMode
     && Boolean(currentServerEventId)
@@ -426,6 +452,19 @@ function updateCommandAvailability() {
   } else {
     el["command-button"].textContent = "当前事件禁止迁移";
   }
+}
+
+function invalidateCurrentServerEvent() {
+  commandRequestGeneration = nextRequestGeneration(commandRequestGeneration);
+  currentServerEventId = null;
+  el["owner-authorized"].checked = false;
+  updateCommandAvailability();
+}
+
+function invalidatePendingTelemetry() {
+  telemetryRequestGeneration = nextRequestGeneration(telemetryRequestGeneration);
+  invalidateCurrentServerEvent();
+  el["run-button"].disabled = false;
 }
 
 async function connectApi() {
@@ -444,7 +483,7 @@ async function connectApi() {
     const session = await response.json();
     apiMode = true;
     apiKey = candidate;
-    currentServerEventId = null;
+    invalidatePendingTelemetry();
     sessionStorage.setItem("highground-api-key", candidate);
     const storageLabel = session.storage === "sqlite" ? "SQLite" : session.storage;
     setApiStatus("connected", `API 已连接 · ${storageLabel}`);
@@ -453,7 +492,7 @@ async function connectApi() {
   } catch (error) {
     apiMode = false;
     apiKey = "";
-    currentServerEventId = null;
+    invalidatePendingTelemetry();
     setApiStatus("error", `后端连接失败 · ${error.message}`);
     updateCommandAvailability();
   } finally {
@@ -468,6 +507,9 @@ async function recordMigrationCommand() {
   }
 
   const eventId = currentServerEventId;
+  commandRequestGeneration = nextRequestGeneration(commandRequestGeneration);
+  const requestGeneration = commandRequestGeneration;
+  let ownerAuthorizationLocked = false;
   el["command-button"].disabled = true;
   setApiStatus("", "正在签发单次授权并重新校验…");
   try {
@@ -480,10 +522,19 @@ async function recordMigrationCommand() {
       body: JSON.stringify({ event_id: eventId, owner_id: "owner-web-console" }),
     });
     if (!authorizationResponse.ok) {
-      const detail = await authorizationResponse.text();
-      throw new Error(`授权 HTTP ${authorizationResponse.status}: ${detail.slice(0, 120)}`);
+      throw await apiFailureFromResponse(authorizationResponse, "authorization");
     }
     const authorization = await authorizationResponse.json();
+    if (!commandRequestCanContinue(
+      requestGeneration,
+      commandRequestGeneration,
+      eventId,
+      currentServerEventId,
+      el["owner-authorized"].checked,
+    )) return;
+
+    ownerAuthorizationLocked = true;
+    el["owner-authorized"].disabled = true;
 
     const commandResponse = await fetch("/api/v1/commands/migrate", {
       method: "POST",
@@ -497,17 +548,32 @@ async function recordMigrationCommand() {
       }),
     });
     if (!commandResponse.ok) {
-      const detail = await commandResponse.text();
-      throw new Error(`命令 HTTP ${commandResponse.status}: ${detail.slice(0, 120)}`);
+      throw await apiFailureFromResponse(commandResponse, "command");
     }
     const command = await commandResponse.json();
-    currentServerEventId = null;
+    if (!commandRequestCanContinue(
+      requestGeneration,
+      commandRequestGeneration,
+      eventId,
+      currentServerEventId,
+      el["owner-authorized"].checked,
+    )) return;
+    invalidateCurrentServerEvent();
     el["action-permission"].textContent = command.status;
     el["command-button"].textContent = `已留痕 ${command.command_id.slice(-8)}`;
     setApiStatus("connected", "命令已真实写入 SQLite · 未发送车辆");
   } catch (error) {
+    if (currentServerEventId !== eventId) return;
+    if (error.invalidatesEvent) {
+      invalidateCurrentServerEvent();
+      setApiStatus("error", error.message);
+      return;
+    }
+    if (requestGeneration !== commandRequestGeneration) return;
     setApiStatus("error", `命令处理失败 · ${error.message}`);
     updateCommandAvailability();
+  } finally {
+    if (ownerAuthorizationLocked) el["owner-authorized"].disabled = false;
   }
 }
 
@@ -584,6 +650,9 @@ function serverResultToView(server, inputs) {
 }
 
 async function runApiDecision() {
+  telemetryRequestGeneration = nextRequestGeneration(telemetryRequestGeneration);
+  const requestGeneration = telemetryRequestGeneration;
+  invalidateCurrentServerEvent();
   updateOutputs();
   const inputs = currentInputs();
   el["run-button"].disabled = true;
@@ -597,11 +666,21 @@ async function runApiDecision() {
       },
       body: JSON.stringify(telemetryPayload(inputs)),
     });
+    const responseState = telemetryResponseState(
+      requestGeneration,
+      telemetryRequestGeneration,
+      response.ok,
+    );
+    if (!responseState.current) return null;
     if (!response.ok) {
-      const detail = await response.text();
-      throw new Error(`HTTP ${response.status}: ${detail.slice(0, 120)}`);
+      throw await apiFailureFromResponse(response, "telemetry");
     }
     const payload = await response.json();
+    if (!telemetryResponseState(
+      requestGeneration,
+      telemetryRequestGeneration,
+      true,
+    ).commitEvent) return null;
     const result = serverResultToView(payload.result, inputs);
     setApiStatus("connected", "API 已连接 · 遥测已写入 SQLite");
     return renderDecision(result, {
@@ -610,10 +689,20 @@ async function runApiDecision() {
       receivedAt: payload.received_at,
     });
   } catch (error) {
-    setApiStatus("error", `遥测提交失败 · ${error.message}`);
+    if (!telemetryResponseState(
+      requestGeneration,
+      telemetryRequestGeneration,
+      false,
+    ).current) return null;
+    if (error.invalidatesEvent) invalidateCurrentServerEvent();
+    setApiStatus("error", error.invalidatesEvent
+      ? error.message
+      : `遥测提交失败 · ${error.message}`);
     throw error;
   } finally {
-    el["run-button"].disabled = false;
+    if (requestGeneration === telemetryRequestGeneration) {
+      el["run-button"].disabled = false;
+    }
   }
 }
 
@@ -640,10 +729,16 @@ for (const input of document.querySelectorAll("#control-form input")) {
   input.addEventListener("input", () => {
     cancelMigrationAnimation({ resetVehicle: true });
     updateOutputs();
-    if (input.id === "owner-authorized" && apiMode && currentServerEventId) {
+    if (input.id === "owner-authorized" && apiMode) {
+      if (!currentServerEventId) input.checked = false;
+      if (currentServerEventId && !input.checked) {
+        commandRequestGeneration = nextRequestGeneration(commandRequestGeneration);
+        setApiStatus("connected", "单次授权已取消 · 未记录命令");
+      }
       updateCommandAvailability();
       return;
     }
+    if (apiMode) invalidatePendingTelemetry();
     runDecision();
     if (apiMode) setApiStatus("connected", "API 已连接 · 参数待提交");
   });

@@ -3,6 +3,8 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -26,6 +28,14 @@ class StoredEvent:
     duplicate: bool = False
 
 
+class MessageIdConflictError(RuntimeError):
+    pass
+
+
+class EventSupersededError(RuntimeError):
+    pass
+
+
 class Database:
     def __init__(self, path: Path):
         self.path = Path(path)
@@ -37,9 +47,18 @@ class Database:
         connection.execute("PRAGMA busy_timeout = 5000")
         return connection
 
+    @contextmanager
+    def _connection(self) -> Iterator[sqlite3.Connection]:
+        connection = self.connect()
+        try:
+            with connection:
+                yield connection
+        finally:
+            connection.close()
+
     def initialize(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        with self.connect() as connection:
+        with self._connection() as connection:
             connection.execute("PRAGMA journal_mode = WAL")
             connection.executescript(
                 """
@@ -49,6 +68,7 @@ class Database:
                     vehicle_id TEXT NOT NULL,
                     source_id TEXT NOT NULL,
                     captured_at TEXT NOT NULL,
+                    captured_at_provided INTEGER CHECK (captured_at_provided IN (0, 1)),
                     received_at TEXT NOT NULL,
                     input_sha256 TEXT NOT NULL,
                     payload_json TEXT NOT NULL
@@ -95,9 +115,21 @@ class Database:
                     ON authorizations(event_id, expires_at DESC);
                 """
             )
+            telemetry_columns = {
+                row["name"]
+                for row in connection.execute("PRAGMA table_info(telemetry)").fetchall()
+            }
+            if "captured_at_provided" not in telemetry_columns:
+                connection.execute(
+                    """
+                    ALTER TABLE telemetry
+                    ADD COLUMN captured_at_provided INTEGER
+                    CHECK (captured_at_provided IN (0, 1))
+                    """
+                )
 
     def health(self) -> bool:
-        with self.connect() as connection:
+        with self._connection() as connection:
             row = connection.execute("SELECT 1 AS ok").fetchone()
         return bool(row and row["ok"] == 1)
 
@@ -117,11 +149,54 @@ class Database:
     def _event_select(where_clause: str) -> str:
         return f"""
             SELECT d.event_id, t.message_id, t.received_at, t.input_sha256,
-                   t.payload_json, d.result_json
+                   t.captured_at_provided, t.payload_json, d.result_json
             FROM decisions d
             JOIN telemetry t ON t.message_id = d.message_id
             WHERE {where_clause}
         """
+
+    @staticmethod
+    def _latest_event_id_for_scope(
+        connection: sqlite3.Connection,
+        event_id: str,
+    ) -> str | None:
+        row = connection.execute(
+            """
+            SELECT latest_decision.event_id
+            FROM decisions target_decision
+            JOIN telemetry target
+              ON target.message_id = target_decision.message_id
+            JOIN telemetry latest
+              ON latest.site_id = target.site_id
+             AND latest.vehicle_id = target.vehicle_id
+            JOIN decisions latest_decision
+              ON latest_decision.message_id = latest.message_id
+            WHERE target_decision.event_id = ?
+            ORDER BY latest.received_at DESC, latest.rowid DESC
+            LIMIT 1
+            """,
+            (event_id,),
+        ).fetchone()
+        return str(row["event_id"]) if row else None
+
+    @staticmethod
+    def _matches_retry_without_capture(
+        row: sqlite3.Row,
+        telemetry: TelemetryIn,
+    ) -> bool:
+        if (
+            row["captured_at_provided"] == 1
+            or "captured_at" in telemetry.model_fields_set
+        ):
+            return False
+        stored_payload = TelemetryIn.model_validate_json(row["payload_json"]).model_dump(
+            mode="json"
+        )
+        incoming_payload = telemetry.model_dump(mode="json")
+        if "captured_at" not in telemetry.model_fields_set:
+            stored_payload.pop("captured_at", None)
+            incoming_payload.pop("captured_at", None)
+        return stored_payload == incoming_payload
 
     def save_telemetry_and_decision(
         self,
@@ -129,8 +204,12 @@ class Database:
         result: DecisionOutput,
     ) -> StoredEvent:
         payload_json = telemetry.model_dump_json()
+        canonical_payload = telemetry.model_dump(mode="json")
+        # A server-generated capture time is not part of the client's retry payload.
+        if "captured_at" not in telemetry.model_fields_set:
+            canonical_payload.pop("captured_at", None)
         canonical_json = json.dumps(
-            telemetry.model_dump(mode="json"),
+            canonical_payload,
             ensure_ascii=False,
             sort_keys=True,
             separators=(",", ":"),
@@ -140,22 +219,38 @@ class Database:
         received_at = _utc_now()
         event_id = f"evt_{uuid4().hex}"
 
-        with self.connect() as connection:
+        with self._connection() as connection:
             connection.execute("BEGIN IMMEDIATE")
             existing = connection.execute(
                 self._event_select("t.message_id = ?"),
                 (telemetry.message_id,),
             ).fetchone()
             if existing:
-                connection.rollback()
+                if existing["input_sha256"] == input_sha256:
+                    connection.rollback()
+                    return self._row_to_event(existing, duplicate=True)
+                if not self._matches_retry_without_capture(existing, telemetry):
+                    connection.rollback()
+                    raise MessageIdConflictError(
+                        "message_id already exists with a different telemetry payload"
+                    )
+                connection.execute(
+                    """
+                    UPDATE telemetry
+                    SET captured_at_provided = 0
+                    WHERE message_id = ? AND captured_at_provided IS NULL
+                    """,
+                    (telemetry.message_id,),
+                )
+                connection.commit()
                 return self._row_to_event(existing, duplicate=True)
 
             connection.execute(
                 """
                 INSERT INTO telemetry (
                     message_id, site_id, vehicle_id, source_id, captured_at,
-                    received_at, input_sha256, payload_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    captured_at_provided, received_at, input_sha256, payload_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     telemetry.message_id,
@@ -163,6 +258,7 @@ class Database:
                     telemetry.vehicle_id,
                     telemetry.source_id,
                     telemetry.captured_at.isoformat(),
+                    int("captured_at" in telemetry.model_fields_set),
                     received_at.isoformat(),
                     input_sha256,
                     payload_json,
@@ -198,7 +294,7 @@ class Database:
         )
 
     def get_event(self, event_id: str) -> StoredEvent | None:
-        with self.connect() as connection:
+        with self._connection() as connection:
             row = connection.execute(
                 self._event_select("d.event_id = ?"),
                 (event_id,),
@@ -206,14 +302,17 @@ class Database:
         return self._row_to_event(row) if row else None
 
     def get_latest(self, site_id: str, vehicle_id: str) -> StoredEvent | None:
-        sql = self._event_select("t.site_id = ? AND t.vehicle_id = ?") + " ORDER BY t.received_at DESC LIMIT 1"
-        with self.connect() as connection:
+        sql = (
+            self._event_select("t.site_id = ? AND t.vehicle_id = ?")
+            + " ORDER BY t.received_at DESC, t.rowid DESC LIMIT 1"
+        )
+        with self._connection() as connection:
             row = connection.execute(sql, (site_id, vehicle_id)).fetchone()
         return self._row_to_event(row) if row else None
 
     def list_events(self, site_id: str, vehicle_id: str, limit: int = 20) -> list[StoredEvent]:
         sql = self._event_select("t.site_id = ? AND t.vehicle_id = ?") + " ORDER BY t.received_at DESC LIMIT ?"
-        with self.connect() as connection:
+        with self._connection() as connection:
             rows = connection.execute(sql, (site_id, vehicle_id, limit)).fetchall()
         return [self._row_to_event(row) for row in rows]
 
@@ -226,7 +325,14 @@ class Database:
         expires_at: datetime,
     ) -> str:
         authorization_id = f"auth_{uuid4().hex}"
-        with self.connect() as connection:
+        with self._connection() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            latest_event_id = self._latest_event_id_for_scope(connection, event_id)
+            if latest_event_id != event_id:
+                connection.rollback()
+                raise EventSupersededError(
+                    "Event has been superseded by newer vehicle telemetry"
+                )
             connection.execute(
                 """
                 INSERT INTO authorizations (
@@ -243,17 +349,26 @@ class Database:
                     expires_at.isoformat(),
                 ),
             )
+            connection.commit()
         return authorization_id
 
-    def consume_authorization(
+    def record_authorized_command(
         self,
         *,
         event_id: str,
         token_sha256: str,
         now: datetime,
+        status: str,
+        response: dict[str, object],
     ) -> str | None:
-        with self.connect() as connection:
+        with self._connection() as connection:
             connection.execute("BEGIN IMMEDIATE")
+            latest_event_id = self._latest_event_id_for_scope(connection, event_id)
+            if latest_event_id != event_id:
+                connection.rollback()
+                raise EventSupersededError(
+                    "Event has been superseded by newer vehicle telemetry"
+                )
             row = connection.execute(
                 """
                 SELECT authorization_id
@@ -279,19 +394,7 @@ class Database:
             if updated.rowcount != 1:
                 connection.rollback()
                 return None
-            connection.commit()
-            return str(row["authorization_id"])
-
-    def record_command(
-        self,
-        *,
-        event_id: str,
-        authorization_id: str,
-        status: str,
-        response: dict[str, object],
-    ) -> str:
-        command_id = f"cmd_{uuid4().hex}"
-        with self.connect() as connection:
+            command_id = f"cmd_{uuid4().hex}"
             connection.execute(
                 """
                 INSERT INTO commands (
@@ -302,10 +405,11 @@ class Database:
                 (
                     command_id,
                     event_id,
-                    authorization_id,
+                    row["authorization_id"],
                     status,
                     json.dumps(response, ensure_ascii=False, sort_keys=True),
                     _utc_now().isoformat(),
                 ),
             )
-        return command_id
+            connection.commit()
+            return command_id
