@@ -1,0 +1,56 @@
+plugins {
+    id "com.android.application"
+}
+
+android {
+    namespace "com.xpeng.highground.p5"
+    compileSdk 33
+
+    defaultConfig {
+        applicationId "com.xpeng.highground.p5"
+        minSdk 24
+        // P5/Xmart OS 3.6.1 compatibility target; raise only after vehicle regression testing.
+        //noinspection OldTargetApi
+        targetSdk 33
+        versionCode 1
+        versionName "0.1.0-p5"
+
+        testInstrumentationRunner "android.test.InstrumentationTestRunner"
+    }
+
+    buildTypes {
+        debug {
+            applicationIdSuffix ".debug"
+            versionNameSuffix "-debug"
+        }
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    testOptions {
+        unitTests.returnDefaultValues = true
+    }
+}
+
+dependencies {
+    // Compile-time definitions only. On a P5 the real classes are supplied by the Xmart OS framework.
+    compileOnly "com.github.open-xpeng:android_sdk:1.0.2"
+    // 1.10.x uses Kotlin 2.1 metadata, which AGP 8.2's lint cannot consume.
+    //noinspection GradleDependency
+    compileOnly "androidx.annotation:annotation:1.6.0"
+
+    testImplementation "junit:junit:4.13.2"
+    testImplementation "org.json:json:20240303"
+    testImplementation "com.squareup.okhttp3:mockwebserver:4.12.0"
+}

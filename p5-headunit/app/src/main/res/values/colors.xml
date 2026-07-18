@@ -1,0 +1,6 @@
+<resources>
+    <color name="highground_blue">#1677FF</color>
+    <color name="highground_dark">#132238</color>
+    <color name="highground_surface">#F4F7FB</color>
+    <color name="highground_warning">#B54708</color>
+</resources>
