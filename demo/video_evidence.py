@@ -4,9 +4,15 @@ import hashlib
 import json
 import math
 import re
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+if not __package__:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from backend.app.database import telemetry_input_sha256
 
 
 ACTION_REQUESTS = {
@@ -358,6 +364,16 @@ def _validate_telemetry_payloads(
             if not started_at <= captured_at <= received_at <= finished_at:
                 raise ValueError(
                     f"Persisted telemetry {message_id} timestamps are outside the run"
+                )
+            try:
+                expected_input_sha256 = telemetry_input_sha256(telemetry)
+            except ValueError as error:
+                raise ValueError(
+                    f"Persisted telemetry {message_id} cannot be canonicalized"
+                ) from error
+            if record.get("input_sha256") != expected_input_sha256:
+                raise ValueError(
+                    f"Persisted telemetry {message_id} input_sha256 does not match canonical telemetry"
                 )
             persisted_by_message[message_id] = telemetry
 

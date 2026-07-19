@@ -24,8 +24,9 @@
 - 决策顺序固定为：移动中异常 → 物理安全闸 → 水位禁行 → 多源一致性 → 最晚安全启动窗口。
 - `MIGRATE_NOW` 事件可签发短时、事件绑定、只能使用一次的授权令牌。
 - 命令执行前再次用原始遥测做安全计算，并拒绝过期、已被同场站同车辆新遥测取代的事件和复用令牌。
+- 显式提供的 `captured_at` 必须满足 `HIGHGROUND_CAPTURE_MAX_AGE_SECONDS` 与 `HIGHGROUND_CAPTURE_FUTURE_TOLERANCE_SECONDS`；服务端生成的兼容时间戳不改变旧版幂等重试语义。
 - 最新决策超过 `HIGHGROUND_EVENT_MAX_AGE_SECONDS` 后返回 `410 Gone`，不会把历史结果继续伪装成实时状态。
-- `record-only` 适配器会将通过校验的命令写入数据库，但明确标记 `RECORDED_NOT_SENT`。
+- `record-only` 适配器会将通过校验的命令写入数据库，但明确标记 `RECORDED_NOT_SENT`；无效或过期授权令牌在执行器调用前即被拒绝。
 - 浏览器可输入 API Key 连接同源后端；“运行决策”会把遥测写入本地 SQLite，并显示服务端事件号和 SHA-256。
 - 对 `MIGRATE_NOW` 事件，浏览器可在车主勾选单次授权后调用后端授权与命令 API；默认结果为 `RECORDED_NOT_SENT`，命令已写库但未发送任何车辆控制指令。
 - 浏览器路线动画只在收到 `RECORDED_NOT_SENT + record-only` 后解锁，并始终标注为数字路线演示；它不表示实车已经移动。

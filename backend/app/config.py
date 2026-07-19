@@ -35,6 +35,8 @@ class Settings:
     actuator_mode: str = "record-only"
     authorization_ttl_seconds: int = 120
     event_max_age_seconds: int = 300
+    capture_max_age_seconds: int = 300
+    capture_future_tolerance_seconds: int = 30
     allowed_origins: tuple[str, ...] = (
         "http://127.0.0.1:8000",
         "http://localhost:8000",
@@ -61,6 +63,12 @@ class Settings:
             actuator_mode=os.getenv("HIGHGROUND_ACTUATOR_MODE", "record-only"),
             authorization_ttl_seconds=int(os.getenv("HIGHGROUND_AUTH_TTL_SECONDS", "120")),
             event_max_age_seconds=int(os.getenv("HIGHGROUND_EVENT_MAX_AGE_SECONDS", "300")),
+            capture_max_age_seconds=int(
+                os.getenv("HIGHGROUND_CAPTURE_MAX_AGE_SECONDS", "300")
+            ),
+            capture_future_tolerance_seconds=int(
+                os.getenv("HIGHGROUND_CAPTURE_FUTURE_TOLERANCE_SECONDS", "30")
+            ),
             allowed_origins=origins,
         )
 
@@ -73,3 +81,7 @@ class Settings:
             raise RuntimeError("Authorization TTL must be at least 10 seconds")
         if self.event_max_age_seconds < self.authorization_ttl_seconds:
             raise RuntimeError("Event maximum age must be >= authorization TTL")
+        if self.capture_max_age_seconds < 1:
+            raise RuntimeError("Capture maximum age must be at least 1 second")
+        if self.capture_future_tolerance_seconds < 0:
+            raise RuntimeError("Capture future tolerance cannot be negative")

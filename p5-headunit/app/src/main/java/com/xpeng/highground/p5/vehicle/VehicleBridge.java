@@ -17,6 +17,15 @@ public interface VehicleBridge {
         return statusReading && voiceAlerts && lightingAlerts;
     }
 
+    static boolean shouldReconnect(
+            boolean reconnectRequested,
+            boolean statusReading,
+            boolean voiceAlerts,
+            boolean lightingAlerts) {
+        return reconnectRequested
+                || !hasAllCapabilities(statusReading, voiceAlerts, lightingAlerts);
+    }
+
     String capabilityStatus();
 
     void speak(AlertPolicy.VoicePriority priority, String text) throws VehicleBridgeException;

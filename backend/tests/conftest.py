@@ -16,6 +16,8 @@ def settings(tmp_path) -> Settings:
         actuator_mode="record-only",
         authorization_ttl_seconds=60,
         event_max_age_seconds=120,
+        capture_max_age_seconds=120,
+        capture_future_tolerance_seconds=15,
         allowed_origins=("http://testserver",),
     )
 

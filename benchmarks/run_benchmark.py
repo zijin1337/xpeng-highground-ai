@@ -62,6 +62,7 @@ def _payload(
     scenario_id = scenario["id"]
     payload["message_id"] = f"msg_bench_{phase}_{iteration:05d}_{scenario_id}"
     payload["vehicle_id"] = f"vehicle-bench-{scenario_id}"
+    payload["captured_at"] = datetime.now(timezone.utc).isoformat()
     return payload
 
 
@@ -223,6 +224,8 @@ def run_benchmark(
             actuator_mode="record-only",
             authorization_ttl_seconds=120,
             event_max_age_seconds=300,
+            capture_max_age_seconds=300,
+            capture_future_tolerance_seconds=30,
             allowed_origins=("http://testserver",),
         )
         _require_equal(settings.policy.to_dict(), matrix["policy"], "benchmark policy")

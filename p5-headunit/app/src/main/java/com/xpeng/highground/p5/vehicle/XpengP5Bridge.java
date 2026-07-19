@@ -20,6 +20,7 @@ public final class XpengP5Bridge implements VehicleBridge {
     private ContextInfoManager.ContextNaviInfoEventListener contextListener;
     private boolean registered;
     private boolean available;
+    private volatile boolean reconnectRequested;
     private String status = "P5 XUI 尚未连接";
     private boolean lightingSnapshotTaken;
     private boolean previousLightOpen;
@@ -28,6 +29,7 @@ public final class XpengP5Bridge implements VehicleBridge {
     @Override
     public synchronized void connect(Listener listener) {
         close();
+        reconnectRequested = false;
         try {
             xuiManager = XUIManager.getInstance();
             smartManager = as(
@@ -59,6 +61,7 @@ public final class XpengP5Bridge implements VehicleBridge {
 
                 @Override
                 public void onErrorEvent(int errorCode, int operation) {
+                    requestReconnect();
                     listener.onVehicleError(
                             "ContextInfo error " + errorCode + "/" + operation,
                             null);
@@ -83,6 +86,7 @@ public final class XpengP5Bridge implements VehicleBridge {
             listener.onConnectionChanged(available, status);
         } catch (Throwable error) {
             available = false;
+            reconnectRequested = true;
             status = "P5 XUI 连接或权限校验失败：" + error.getClass().getSimpleName()
                     + safeMessage(error);
             listener.onConnectionChanged(false, status);
@@ -97,7 +101,8 @@ public final class XpengP5Bridge implements VehicleBridge {
 
     @Override
     public synchronized boolean needsReconnect() {
-        return !VehicleBridge.hasAllCapabilities(
+        return VehicleBridge.shouldReconnect(
+                reconnectRequested,
                 registered,
                 smartManager != null,
                 ambientLightManager != null);
@@ -130,6 +135,7 @@ public final class XpengP5Bridge implements VehicleBridge {
                     break;
             }
         } catch (Throwable error) {
+            reconnectRequested = true;
             throw new VehicleBridgeException("P5 小P语音调用失败", error);
         }
     }
@@ -153,6 +159,7 @@ public final class XpengP5Bridge implements VehicleBridge {
                 restoreLighting();
             }
         } catch (Throwable error) {
+            reconnectRequested = true;
             throw new VehicleBridgeException("P5 环境灯调用失败", error);
         }
     }
@@ -194,6 +201,10 @@ public final class XpengP5Bridge implements VehicleBridge {
 
     private static <T> T as(Object value, Class<T> type) {
         return type.isInstance(value) ? type.cast(value) : null;
+    }
+
+    private void requestReconnect() {
+        reconnectRequested = true;
     }
 
     private static String yesNo(boolean value) {

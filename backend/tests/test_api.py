@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 import pytest
 
 from backend.app import database as database_module
+from backend.app import main as main_module
 from backend.app.database import Database
 from backend.app.decision_engine import evaluate_decision
 from backend.app.models import TelemetryIn
@@ -208,6 +209,94 @@ def test_initialize_migrates_capture_presence_marker(tmp_path):
     assert "captured_at_provided" in columns
 
 
+def test_explicit_stale_capture_is_rejected_without_persistence(
+    client: TestClient,
+    headers: dict[str, str],
+) -> None:
+    max_age = client.app.state.settings.capture_max_age_seconds
+    payload = make_payload("msg_stale_capture_001")
+    payload["captured_at"] = (
+        datetime.now(timezone.utc) - timedelta(seconds=max_age + 1)
+    ).isoformat()
+
+    response = client.post("/api/v1/telemetry", json=payload, headers=headers)
+
+    assert response.status_code == 422
+    assert "older than the configured maximum age" in response.json()["detail"]
+    history = client.get(
+        "/api/v1/events",
+        params={"site_id": payload["site_id"], "vehicle_id": payload["vehicle_id"]},
+        headers=headers,
+    )
+    assert history.status_code == 200
+    assert history.json() == []
+
+
+def test_explicit_future_capture_is_rejected(
+    client: TestClient,
+    headers: dict[str, str],
+) -> None:
+    tolerance = client.app.state.settings.capture_future_tolerance_seconds
+    payload = make_payload("msg_future_capture_001")
+    payload["captured_at"] = (
+        datetime.now(timezone.utc) + timedelta(seconds=tolerance + 1)
+    ).isoformat()
+
+    response = client.post("/api/v1/telemetry", json=payload, headers=headers)
+
+    assert response.status_code == 422
+    assert "ahead of server time" in response.json()["detail"]
+
+
+def test_identical_retry_remains_idempotent_after_capture_ages_out(
+    client: TestClient,
+    headers: dict[str, str],
+    monkeypatch,
+) -> None:
+    captured_at = datetime.now(timezone.utc)
+    payload = make_payload("msg_capture_retry_001")
+    payload["captured_at"] = captured_at.isoformat()
+    monkeypatch.setattr(main_module, "_utc_now", lambda: captured_at)
+
+    first = client.post("/api/v1/telemetry", json=payload, headers=headers)
+    assert first.status_code == 201
+
+    aged_now = captured_at + timedelta(
+        seconds=client.app.state.settings.capture_max_age_seconds + 1
+    )
+    monkeypatch.setattr(main_module, "_utc_now", lambda: aged_now)
+    retry = client.post("/api/v1/telemetry", json=payload, headers=headers)
+
+    assert retry.status_code == 200
+    assert retry.json()["duplicate"] is True
+    assert retry.json()["event_id"] == first.json()["event_id"]
+
+
+def test_changed_retry_keeps_message_id_conflict_after_capture_ages_out(
+    client: TestClient,
+    headers: dict[str, str],
+    monkeypatch,
+) -> None:
+    captured_at = datetime.now(timezone.utc)
+    payload = make_payload("msg_capture_conflict_001")
+    payload["captured_at"] = captured_at.isoformat()
+    monkeypatch.setattr(main_module, "_utc_now", lambda: captured_at)
+    assert client.post("/api/v1/telemetry", json=payload, headers=headers).status_code == 201
+
+    aged_now = captured_at + timedelta(
+        seconds=client.app.state.settings.capture_max_age_seconds + 1
+    )
+    monkeypatch.setattr(main_module, "_utc_now", lambda: aged_now)
+    changed = deepcopy(payload)
+    changed["environment"]["water_level_cm"] = 5
+    conflict = client.post("/api/v1/telemetry", json=changed, headers=headers)
+
+    assert conflict.status_code == 409
+    assert conflict.json()["detail"] == (
+        "message_id already exists with a different telemetry payload"
+    )
+
+
 def test_latest_returns_gone_when_latest_event_is_stale(
     client: TestClient,
     headers: dict[str, str],
@@ -275,6 +364,123 @@ def test_rising_event_authorization_and_one_time_command(
         headers=headers,
     )
     assert replay.status_code == 401
+
+
+def test_invalid_authorization_does_not_call_record_only_actuator(
+    client: TestClient,
+    headers: dict[str, str],
+    monkeypatch,
+) -> None:
+    decision = client.post(
+        "/api/v1/telemetry",
+        json=rising_payload("msg_invalid_token_no_actuator"),
+        headers=headers,
+    ).json()
+    actuator = client.app.state.actuator
+    calls: list[tuple[str, str]] = []
+    original_migrate = actuator.migrate_to_high_point
+
+    def tracked_migrate(*, event_id: str, vehicle_id: str):
+        calls.append((event_id, vehicle_id))
+        return original_migrate(event_id=event_id, vehicle_id=vehicle_id)
+
+    monkeypatch.setattr(actuator, "migrate_to_high_point", tracked_migrate)
+    response = client.post(
+        "/api/v1/commands/migrate",
+        json={
+            "event_id": decision["event_id"],
+            "authorization_token": "invalid-token-long-enough-for-schema",
+        },
+        headers=headers,
+    )
+
+    assert response.status_code == 401
+    assert calls == []
+
+
+def test_expired_authorization_does_not_call_record_only_actuator(
+    client: TestClient,
+    headers: dict[str, str],
+    monkeypatch,
+) -> None:
+    decision = client.post(
+        "/api/v1/telemetry",
+        json=rising_payload("msg_expired_token_no_actuator"),
+        headers=headers,
+    ).json()
+    authorization = client.post(
+        "/api/v1/authorizations",
+        json={"event_id": decision["event_id"], "owner_id": "owner-test-01"},
+        headers=headers,
+    ).json()
+    with closing(client.app.state.database.connect()) as connection:
+        connection.execute(
+            "UPDATE authorizations SET expires_at = ? WHERE authorization_id = ?",
+            (
+                (datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat(),
+                authorization["authorization_id"],
+            ),
+        )
+        connection.commit()
+
+    actuator = client.app.state.actuator
+    calls: list[tuple[str, str]] = []
+    original_migrate = actuator.migrate_to_high_point
+
+    def tracked_migrate(*, event_id: str, vehicle_id: str):
+        calls.append((event_id, vehicle_id))
+        return original_migrate(event_id=event_id, vehicle_id=vehicle_id)
+
+    monkeypatch.setattr(actuator, "migrate_to_high_point", tracked_migrate)
+    response = client.post(
+        "/api/v1/commands/migrate",
+        json={
+            "event_id": decision["event_id"],
+            "authorization_token": authorization["authorization_token"],
+        },
+        headers=headers,
+    )
+
+    assert response.status_code == 401
+    assert calls == []
+
+
+def test_runtime_rejects_unverified_record_only_actuator(
+    client: TestClient,
+    headers: dict[str, str],
+) -> None:
+    decision = client.post(
+        "/api/v1/telemetry",
+        json=rising_payload("msg_unverified_runtime_actuator"),
+        headers=headers,
+    ).json()
+    authorization = client.post(
+        "/api/v1/authorizations",
+        json={"event_id": decision["event_id"], "owner_id": "owner-test-01"},
+        headers=headers,
+    ).json()
+    client.app.state.actuator = object()
+
+    health = client.get("/healthz")
+    command = client.post(
+        "/api/v1/commands/migrate",
+        json={
+            "event_id": decision["event_id"],
+            "authorization_token": authorization["authorization_token"],
+        },
+        headers=headers,
+    )
+
+    assert health.status_code == 503
+    assert command.status_code == 503
+    assert command.json()["detail"] == "Verified record-only actuator is required"
+
+
+def test_startup_rejects_unverified_record_only_actuator(settings, monkeypatch) -> None:
+    monkeypatch.setattr(main_module, "build_actuator", lambda _: object())
+
+    with pytest.raises(RuntimeError, match="verified RecordOnlyActuator"):
+        main_module.create_app(settings)
 
 
 def test_command_record_failure_does_not_consume_authorization(

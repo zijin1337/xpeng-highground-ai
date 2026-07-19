@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from backend.app.database import telemetry_input_sha256
 from demo.video_evidence import frame_second, load_json, validate_inputs
 
 
@@ -64,6 +65,7 @@ def canonical_inputs() -> tuple[dict[str, object], dict[str, object]]:
             "latest": {"method": "GET", "path": "/api/v1/decisions/latest"},
         }
         if action in {"telemetry", "latest"}:
+            telemetry_index = index if action == "telemetry" else 7
             response = {
                 "event_id": (
                     telemetry_ids[index][0]
@@ -75,16 +77,18 @@ def canonical_inputs() -> tuple[dict[str, object], dict[str, object]]:
                     if action == "telemetry"
                     else telemetry_ids[7][1]
                 ),
-                    "input_sha256": "a" * 64,
+                "input_sha256": telemetry_input_sha256(
+                    fixture_telemetry(telemetry_index)
+                ),
                 "received_at": timestamp_at(
                     step["at_seconds"] if action == "telemetry" else 115
                 ),
-                    **(
-                        {"telemetry": fixture_telemetry(7)}
-                        if action == "latest"
-                        else {}
-                    ),
-                    "result": {
+                **(
+                    {"telemetry": fixture_telemetry(7)}
+                    if action == "latest"
+                    else {}
+                ),
+                "result": {
                     field: expected[field]
                     for field in ("decision", "risk_level", "permission")
                 }
@@ -108,7 +112,9 @@ def canonical_inputs() -> tuple[dict[str, object], dict[str, object]]:
                 {
                     "event_id": telemetry_ids[event_index][0],
                     "message_id": telemetry_ids[event_index][1],
-                    "input_sha256": "a" * 64,
+                    "input_sha256": telemetry_input_sha256(
+                        fixture_telemetry(event_index)
+                    ),
                     "received_at": timestamp_at(
                         scenario["steps"][event_index]["at_seconds"]
                     ),
@@ -158,6 +164,12 @@ def canonical_inputs() -> tuple[dict[str, object], dict[str, object]]:
     return scenario, evidence
 
 
+def test_video_validation_accepts_canonical_fixture() -> None:
+    scenario, evidence = canonical_inputs()
+
+    validate_inputs(scenario, evidence)
+
+
 def test_video_validation_rejects_missing_event_identifier() -> None:
     scenario, evidence = canonical_inputs()
     del evidence["steps"][0]["response"]["event_id"]
@@ -192,6 +204,22 @@ def test_video_validation_rejects_event_hash_mismatch() -> None:
     events["response"][0]["input_sha256"] = "b" * 64
 
     with pytest.raises(ValueError, match="input_sha256"):
+        validate_inputs(scenario, evidence)
+
+
+def test_video_validation_rejects_consistently_forged_input_hash() -> None:
+    scenario, evidence = canonical_inputs()
+    telemetry = evidence["steps"][0]["response"]
+    events = next(step for step in evidence["steps"] if step["action"] == "events")
+    persisted = next(
+        event
+        for event in events["response"]
+        if event["event_id"] == telemetry["event_id"]
+    )
+    telemetry["input_sha256"] = "b" * 64
+    persisted["input_sha256"] = "b" * 64
+
+    with pytest.raises(ValueError, match="does not match canonical telemetry"):
         validate_inputs(scenario, evidence)
 
 
