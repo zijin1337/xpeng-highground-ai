@@ -6,6 +6,14 @@
 
 > 重要边界：后端、数据库、API、授权和命令留痕均可真实运行；默认车辆适配器为 `record-only`，不会向任何真实车辆发送控制指令。接入实车必须取得制造商官方 SDK/API、车辆授权、封闭场地许可，并完成独立安全壳和功能安全验证。本仓库不伪造小鹏车辆控制接口。
 
+## 评审证据入口
+
+- [系统架构图](#系统结构)：场端、浏览器、FastAPI/SQLite 证据链与 P5 只读端的 Mermaid 数据流，并明确画出当前不存在的车辆执行链路。
+- [两分钟暴雨全流程 Demo](./docs/DEMO.md)：固定 120 秒时间线、一键脚本、逐步断言、带事件链 ID 与 SHA-256 的脱敏 HTTP 运行记录和录屏清单；当前尚未发布公开视频。
+- [可复现 Benchmark](./docs/BENCHMARK.md)：9 个确定性场景覆盖全部 7 个决策码，并报告限定在本机 TestClient + 临时 SQLite 的 p50/p95。
+- [现有方案与小鹏能力对比](./docs/competition-comparison.md)：地磁、人工通知、传统闸门、泊车能力、涉水边界及官方资料来源。
+- [传感器与边缘网关成本模型](./docs/cost-model.md)：内部预算假设下，单站 3 年 TCO 为 `¥77,200`、10 站为 `¥924,000`；逐项 BOM、算式、未计价项和正式 RFQ 条件均可复核。
+
 ## 现在真正可运行的部分
 
 - `POST /api/v1/telemetry` 接收 HTTP 传感器与车辆状态遥测。
@@ -18,25 +26,57 @@
 - 命令执行前再次用原始遥测做安全计算，并拒绝过期、已被同场站同车辆新遥测取代的事件和复用令牌。
 - 最新决策超过 `HIGHGROUND_EVENT_MAX_AGE_SECONDS` 后返回 `410 Gone`，不会把历史结果继续伪装成实时状态。
 - `record-only` 适配器会将通过校验的命令写入数据库，但明确标记 `RECORDED_NOT_SENT`。
-- 浏览器可输入 API Key 连接同源后端；“运行决策”会把遥测真实写入 SQLite，并显示服务端事件号和 SHA-256。
-- 对 `MIGRATE_NOW` 事件，浏览器可在车主勾选单次授权后调用真实授权与命令 API；默认结果为 `RECORDED_NOT_SENT`，命令已写库但没有发车。
+- 浏览器可输入 API Key 连接同源后端；“运行决策”会把遥测写入本地 SQLite，并显示服务端事件号和 SHA-256。
+- 对 `MIGRATE_NOW` 事件，浏览器可在车主勾选单次授权后调用后端授权与命令 API；默认结果为 `RECORDED_NOT_SENT`，命令已写库但未发送任何车辆控制指令。
+- 浏览器路线动画只在收到 `RECORDED_NOT_SENT + record-only` 后解锁，并始终标注为数字路线演示；它不表示实车已经移动。
+- P5 Android 应用只轮询最新决策。XUI 车速、挡位和天气状态只在车机本地用于展示与提醒，不作为场端遥测上传。
 - 提供边缘采集客户端、Docker、健康检查、OpenAPI 文档以及前后端自动测试。
 
 ## 系统结构
 
 ```mermaid
-flowchart LR
-    S[水位计 / 雨量计 / 车端状态] --> E[edge_client 或场端网关]
-    E -->|HTTPS + X-API-Key| A[FastAPI 遥测接口]
-    A --> V[输入校验]
-    V --> D[确定性安全决策引擎]
-    D --> DB[(SQLite 证据库)]
-    D --> G{Go / No-Go}
-    G -->|MIGRATE_NOW| O[车主事件级授权]
-    O --> R[执行前重新校验]
-    R --> X[车辆适配层]
-    X -->|默认| N[RECORDED_NOT_SENT]
+flowchart TB
+    subgraph SITE["地下车库场端"]
+        S["主/辅水位计、雨量计、路线与闸机状态"] --> GW["edge_client / 场端网关"]
+    end
+
+    subgraph WEB["浏览器控制台"]
+        LOCAL["GitHub Pages / 本地模式"] --> JS["浏览器解释型决策<br/>不写 SQLite、不签发授权"]
+        APIUI["API 连接模式"]
+        DIGITAL["数字路线演示<br/>仅回放 RECORDED_NOT_SENT"]
+    end
+
+    subgraph BACKEND["FastAPI 决策与证据服务"]
+        TAPI["POST /telemetry"] --> VALIDATE["Pydantic 校验与幂等检查"]
+        VALIDATE --> ENGINE["确定性安全决策引擎"]
+        ENGINE --> EVIDENCE["遥测 + SHA-256 + 决策事务"]
+        AUTH["POST /authorizations"] --> FRESH["最新事件、新鲜度、MIGRATE_NOW 校验"]
+        CMD["POST /commands/migrate"] --> RECHECK["执行前重新计算安全条件"]
+        RECHECK --> RO["RecordOnlyActuator"]
+        RO --> ATOMIC["原子事务：校验最新事件<br/>消费单次令牌 + 写命令留痕"]
+        RO --> NOSEND["RECORDED_NOT_SENT<br/>不发送车辆控制指令"]
+        LATEST["GET /decisions/latest"]
+        DB[("SQLite 证据库")]
+        EVIDENCE --> DB
+        FRESH --> DB
+        ATOMIC --> DB
+        DB --> LATEST
+    end
+
+    subgraph P5["XPENG P5 Android 只读监控"]
+        APP["HighGroundMonitorService"] -->|"只读轮询"| LATEST
+        XUISTATE["XUI 本地车速、挡位、天气"] --> APP
+        APP --> REMIND["小 P 语音 / 环境灯提醒"]
+    end
+
+    GW -->|"HTTPS + X-API-Key"| TAPI
+    APIUI -->|"遥测"| TAPI
+    APIUI -->|"事件级授权"| AUTH
+    APIUI -->|"留痕命令"| CMD
+    NOSEND --> DIGITAL
 ```
+
+图中没有从 P5/XUI 指向 `/telemetry` 的连线，也没有从 `RecordOnlyActuator` 指向车辆执行器的连线。这两条缺失是当前实现的明确边界，不是省略。
 
 ## 方式一：Docker 启动
 
@@ -70,9 +110,9 @@ docker compose --env-file .env up --build
 - OpenAPI/Swagger：`http://127.0.0.1:8000/docs`
 - 健康检查：`http://127.0.0.1:8000/healthz`
 
-在界面的“后端 X-API-Key”中填写 `.env` 里的 `HIGHGROUND_API_KEY`，点击“连接真实后端”。连接成功后，“运行决策”会写入数据库，而不是只运行浏览器内算法。
+在界面的“后端 X-API-Key”中填写 `.env` 里的 `HIGHGROUND_API_KEY`，点击“连接本地后端”。连接成功后，“运行决策”会写入本地 SQLite，而不是只运行浏览器内算法。
 
-要验证完整安全链路：选择“暴雨快速上涨” → 点击“运行决策” → 勾选“车主确认本次单次授权” → 点击“验证一次性授权并记录命令”。页面会调用两个真实 API、重新执行安全校验，并显示“命令已真实写入 SQLite · 未发送车辆”。
+要验证完整后端安全链路：选择“暴雨快速上涨” → 点击“运行决策” → 勾选“车主确认本次单次授权” → 点击“验证一次性授权并记录命令”。页面会调用两个本地 API、重新执行安全校验，并显示“命令已写入本地 SQLite · 未发送车辆”。
 
 停止：
 
@@ -108,7 +148,17 @@ export HIGHGROUND_ACTUATOR_MODE="record-only"
 uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-## 发送一条真实 HTTP 遥测
+## 两分钟暴雨 Demo
+
+Windows 下从仓库根目录运行：
+
+```powershell
+.\demo\run_demo.ps1 -TimeScale 1
+```
+
+脚本会启动本地 FastAPI，按 `0 / 20 / 45 / 70 / 85 / 90 / 105 / 115 / 120` 秒执行遥测、授权、命令留痕和证据查询，并断言最终为 `NO_GO`。快速回归可用 `-TimeScale 0`。完整时间线、录屏口径与证据字段见 [Demo 文档](./docs/DEMO.md)。当前仓库提供可复现录屏流程，但尚未发布 MP4、GitHub Release 或 B 站成片链接。
+
+## 发送一条本地 HTTP 遥测
 
 仓库自带的边缘客户端使用 Python 标准库，不需要额外依赖：
 
@@ -194,12 +244,15 @@ T_last = T_threshold - T_route - T_queue - T_buffer
 - 授权令牌不能重复使用，命令写库失败不会提前消费令牌；
 - SQLite 请求连接会在操作后显式关闭；
 - SQLite 事件历史持久化。
+- 两分钟固定 Demo 的完整 HTTP、授权、`RECORDED_NOT_SENT` 和令牌脱敏流程；
+- 9 场景 Benchmark 矩阵对全部决策码的合同覆盖与百分位报告结构。
 
 运行全部测试：
 
 ```bash
 npm test
 python -m pytest backend/tests -q
+python -m benchmarks.run_benchmark --iterations 50 --warmups 3
 ```
 
 GitHub Actions 会同时运行 JavaScript 决策测试和 Python API/数据库测试。
@@ -222,23 +275,26 @@ xpeng-highground-ai/
 ├─ src/
 │  ├─ app.js                   # UI、API 连接和本地降级演示
 │  └─ decision-engine.js       # 浏览器内解释型引擎
-├─ p5-headunit/                # 可安装到小鹏 P5 的 Android 只读监控与座舱提醒应用
+├─ demo/                       # 固定两分钟场景、一键脚本与 HTTP 断言运行器
+├─ benchmarks/                 # 确定性场景矩阵、本地延迟工具与参考报告
+├─ docs/                       # Demo、Benchmark、竞品对比与成本模型
+├─ p5-headunit/                # 面向 P5 XUI 的 Android 只读监控与座舱提醒工程
 ├─ Dockerfile
 ├─ docker-compose.yml
 ├─ index.html
 └─ styles.css
 ```
 
-## GitHub Pages 与真实后端的区别
+## GitHub Pages 与可运行后端的区别
 
-GitHub Pages 地址只能运行静态界面和浏览器演示，因为 Pages 不能运行 Python 或 SQLite。要使用真实遥测、数据库、授权和命令接口，必须用 Docker/本地 Python 启动本仓库，或把容器部署到支持后端服务的平台。
+GitHub Pages 地址只能运行静态界面和浏览器演示，因为 Pages 不能运行 Python 或 SQLite。要使用后端遥测 API、数据库、授权和命令接口，必须用 Docker/本地 Python 启动本仓库，或把容器部署到支持后端服务的平台。
 
 ## 小鹏 P5 车端
 
 [`p5-headunit/`](./p5-headunit/) 是独立 Android 工程，按 Open-Xpeng 社区 P5 XUI SDK
-`1.0.2` 的实际类定义编译。它能在车机上监听车速、原始挡位码和天气事件，轮询本后端的最新决策，
-并调用小 P 语音和环境灯提醒。最新决策过期时会清除陈旧卡片并等待新遥测，但不会把“数据未知”当成风险解除；风险灯意图会本地锁存，并在持续监控服务重建后尝试恢复。XUI 运行时或系统权限不可用时会明确降级并定期重新探测，不会崩溃或伪造成功。
+`1.0.2` 的类定义编译。工程实现了监听车速、原始挡位码和天气事件、轮询本后端最新决策，以及调用小 P 语音和环境灯提醒的代码路径。最新决策过期时会清除陈旧卡片并等待新遥测，但不会把“数据未知”当成风险解除；风险灯意图会本地锁存，并在持续监控服务重建后尝试恢复。XUI 运行时或系统权限不可用时会明确降级并定期重新探测，不会崩溃或伪造成功。
 车端拒绝后端重定向和未知决策码，避免 API Key 泄露或把不兼容响应误判为安全状态。
+车速、挡位和天气事件不离开 Android 应用，也不会被该工程 POST 到场端遥测接口。当前只能确认 JVM 单元测试、APK 构建和 Android Lint 已通过；尚未完成 P5 实车/Xmart OS 白名单验证，因此不把上述代码路径表述为已在车机运行。
 
 ```powershell
 cd p5-headunit
@@ -258,7 +314,7 @@ cd p5-headunit
 5. HIL、封闭场地、故障注入、回归和功能安全验证；
 6. 保险、隐私、网络安全、数据留存和事故责任流程。
 
-拿到官方接口规范后，只需实现 `VehicleActuator` 协议，并在独立安全验证通过后替换 `RecordOnlyActuator`。在此之前，系统会明确拒绝声称已控制真实车辆。
+拿到官方接口规范后，仍需实现 `VehicleActuator` 协议，并完成上述授权、互锁、安全壳、HIL 和封闭场地验证；全部验收通过后才可评估替换 `RecordOnlyActuator`。在此之前，系统会明确拒绝声称已控制真实车辆。
 
 ## 许可证
 

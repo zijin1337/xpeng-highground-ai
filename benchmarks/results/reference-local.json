@@ -1,0 +1,194 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-18T18:12:05.815702+00:00",
+  "scope": "Local in-process FastAPI TestClient + temporary SQLite; includes ASGI dispatch, validation, decision logic, persistence, and serialization; excludes network and TLS.",
+  "configuration": {
+    "iterations_per_scenario": 50,
+    "warmup_iterations_per_scenario": 5,
+    "scenario_count": 9,
+    "percentile_method": "nearest-rank",
+    "actuator_mode": "record-only",
+    "policy": {
+      "danger_water_level_cm": 22.0,
+      "rain_watch_threshold_mm_h": 50.0,
+      "min_sensor_confidence": 0.72,
+      "max_sensor_disagreement_cm": 5.0,
+      "route_distance_m": 260.0,
+      "max_speed_kmh": 5.0,
+      "queue_ahead": 2,
+      "batch_size": 3,
+      "batch_interval_min": 0.7,
+      "safety_buffer_min": 3.0,
+      "prepare_horizon_min": 20.0,
+      "migrate_horizon_min": 7.0
+    }
+  },
+  "environment": {
+    "python": "3.12.3",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+    "sqlite": "3.45.1",
+    "fastapi": "0.139.2",
+    "starlette": "1.3.1",
+    "httpx2": "2.7.0"
+  },
+  "correctness": {
+    "passed": true,
+    "cases": [
+      {
+        "id": "stay_clear",
+        "decision": "STAY",
+        "passed": true
+      },
+      {
+        "id": "watch_heavy_rain",
+        "decision": "WATCH",
+        "passed": true
+      },
+      {
+        "id": "prepare_window",
+        "decision": "PREPARE",
+        "passed": true
+      },
+      {
+        "id": "migrate_window",
+        "decision": "MIGRATE_NOW",
+        "passed": true
+      },
+      {
+        "id": "verify_low_confidence",
+        "decision": "VERIFY_ONLY",
+        "passed": true
+      },
+      {
+        "id": "no_go_route_blocked",
+        "decision": "NO_GO",
+        "passed": true
+      },
+      {
+        "id": "no_go_water_threshold",
+        "decision": "NO_GO",
+        "passed": true
+      },
+      {
+        "id": "no_go_window_closed",
+        "decision": "NO_GO",
+        "passed": true
+      },
+      {
+        "id": "emergency_stop_link_loss",
+        "decision": "EMERGENCY_STOP",
+        "passed": true
+      }
+    ],
+    "vehicle_command_transmitted": false
+  },
+  "latency": {
+    "telemetry_ingest_all_scenarios": {
+      "count": 450,
+      "min_ms": 21.868,
+      "p50_ms": 40.597,
+      "p95_ms": 202.241,
+      "max_ms": 881.035,
+      "mean_ms": 67.846
+    },
+    "telemetry_ingest_by_scenario": {
+      "stay_clear": {
+        "count": 50,
+        "min_ms": 27.057,
+        "p50_ms": 43.055,
+        "p95_ms": 148.336,
+        "max_ms": 881.035,
+        "mean_ms": 70.14
+      },
+      "watch_heavy_rain": {
+        "count": 50,
+        "min_ms": 25.42,
+        "p50_ms": 39.808,
+        "p95_ms": 448.56,
+        "max_ms": 532.236,
+        "mean_ms": 81.371
+      },
+      "prepare_window": {
+        "count": 50,
+        "min_ms": 21.868,
+        "p50_ms": 40.42,
+        "p95_ms": 281.604,
+        "max_ms": 716.375,
+        "mean_ms": 79.706
+      },
+      "migrate_window": {
+        "count": 50,
+        "min_ms": 25.384,
+        "p50_ms": 40.546,
+        "p95_ms": 240.166,
+        "max_ms": 341.347,
+        "mean_ms": 69.295
+      },
+      "verify_low_confidence": {
+        "count": 50,
+        "min_ms": 25.726,
+        "p50_ms": 41.054,
+        "p95_ms": 134.711,
+        "max_ms": 340.101,
+        "mean_ms": 52.585
+      },
+      "no_go_route_blocked": {
+        "count": 50,
+        "min_ms": 27.793,
+        "p50_ms": 39.682,
+        "p95_ms": 133.675,
+        "max_ms": 365.522,
+        "mean_ms": 51.892
+      },
+      "no_go_water_threshold": {
+        "count": 50,
+        "min_ms": 25.576,
+        "p50_ms": 41.16,
+        "p95_ms": 153.715,
+        "max_ms": 731.904,
+        "mean_ms": 61.128
+      },
+      "no_go_window_closed": {
+        "count": 50,
+        "min_ms": 26.309,
+        "p50_ms": 39.248,
+        "p95_ms": 322.41,
+        "max_ms": 331.42,
+        "mean_ms": 65.344
+      },
+      "emergency_stop_link_loss": {
+        "count": 50,
+        "min_ms": 24.377,
+        "p50_ms": 37.427,
+        "p95_ms": 366.66,
+        "max_ms": 535.508,
+        "mean_ms": 79.154
+      }
+    },
+    "latest_decision": {
+      "count": 450,
+      "min_ms": 5.95,
+      "p50_ms": 8.705,
+      "p95_ms": 12.475,
+      "max_ms": 338.178,
+      "mean_ms": 10.626
+    },
+    "migration_authorization": {
+      "count": 50,
+      "min_ms": 28.303,
+      "p50_ms": 42.192,
+      "p95_ms": 156.707,
+      "max_ms": 380.217,
+      "mean_ms": 60.553
+    },
+    "record_only_command": {
+      "count": 50,
+      "min_ms": 28.818,
+      "p50_ms": 41.82,
+      "p95_ms": 391.637,
+      "max_ms": 820.024,
+      "mean_ms": 92.671
+    }
+  }
+}

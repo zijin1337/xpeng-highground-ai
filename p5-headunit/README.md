@@ -1,11 +1,11 @@
 # 高地 AI · 小鹏 P5 车端
 
-这是可安装到小鹏 P5 车机 Android 环境的车端应用，不是网页动画或车辆运动模拟器。
+这是面向小鹏 P5 车机 Android 环境的可构建只读监控工程，不是网页动画或车辆运动模拟器。当前只确认 JVM 单元测试、APK 构建和 Android Lint；尚未在 P5 实车上确认第三方 APK、系统签名白名单或 XUI 权限。
 
-## 已接入的真实能力
+## 已实现的代码路径
 
 - 使用 Open-Xpeng 社区整理的 P5 XUI SDK `1.0.2` 编译。
-- 监听 `ContextInfoManager.ContextNaviInfoEventListener` 的真实车速、原始挡位码和天气事件。
+- 实现 `ContextInfoManager.ContextNaviInfoEventListener` 的车速、原始挡位码和天气事件监听；回调值与单位仍待实车核对。
 - 每 15 秒通过 HTTPS 调用现有后端的
   `GET /api/v1/decisions/latest`。
 - 后端返回 `410 Gone` 时清除陈旧决策并等待新遥测；已有高风险灯光意图本地锁存，持续监控服务重建后会尝试恢复，直到新鲜决策或车主停止监控。
@@ -30,6 +30,8 @@
 - 对应提交：`8b96a47929e508dc337f122d0dc2065c40e301e4`
 - 社区文档标注车型/车机版本：小鹏 P5 / 3.6.1
 - SDK 自述为“非公开安卓 SDK”，且承认并非全部 API 都经过测试。
+
+本工程与 Demo 仅采用“P5 / Xmart OS 3.6.1 社区 SDK”这一兼容性假设。社区资料没有给出可核验的市场、年款和具体硬件配置，因此这三项保持“未核验”；它不代表欧洲 XPILOT 2.5 版 P5，也不代表所有国内 P5 配置。
 
 依赖采用 `compileOnly`：APK 内不打包小鹏框架桩代码，运行时只使用 P5 Xmart OS
 实际提供的 `com.xiaopeng.xuimanager` 类。
@@ -58,7 +60,7 @@ app/build/outputs/apk/debug/app-debug.apk
 也可以在 GitHub 对应提交或 PR 的 Actions 运行中下载 `highground-p5-debug-apk`
 构建产物。该文件是未使用小鹏系统签名的调试包，只用于授权测试设备。
 
-安装到已由车主或开发单位合法开启 ADB 的 P5：
+取得目标测试车的第三方 APK、系统签名/白名单和三个 XUI 权限后，可在静止车辆上尝试安装（本项目尚未完成该步骤）：
 
 ```powershell
 adb install -r .\app\build\outputs\apk\debug\app-debug.apk
@@ -69,7 +71,9 @@ adb install -r .\app\build\outputs\apk\debug\app-debug.apk
 
 ## 配置与联调
 
-1. 部署仓库现有 FastAPI 后端，并让 P5 能通过网络访问。
+完成上述实车权限核验后，联调顺序为：
+
+1. 部署仓库现有 FastAPI 后端，并让目标 P5 测试车能通过网络访问。
 2. 场端水位计/雨量计继续向 `/api/v1/telemetry` 写入遥测。
 3. 在 P5 应用中填写后端地址、`X-API-Key`、场站 ID 和车辆 ID。
 4. 点击“保存并启动”。页面会分别显示后端、P5 XUI、车速/挡位/天气和最新决策状态。

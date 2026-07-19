@@ -1,0 +1,204 @@
+{
+  "schema_version": 1,
+  "description": "Deterministic decision matrix for the default HighGround policy.",
+  "policy": {
+    "danger_water_level_cm": 22.0,
+    "rain_watch_threshold_mm_h": 50.0,
+    "min_sensor_confidence": 0.72,
+    "max_sensor_disagreement_cm": 5.0,
+    "route_distance_m": 260.0,
+    "max_speed_kmh": 5.0,
+    "queue_ahead": 2,
+    "batch_size": 3,
+    "batch_interval_min": 0.7,
+    "safety_buffer_min": 3.0,
+    "prepare_horizon_min": 20.0,
+    "migrate_horizon_min": 7.0
+  },
+  "base_telemetry": {
+    "site_id": "garage-benchmark-01",
+    "vehicle_id": "vehicle-benchmark",
+    "source_id": "edge-benchmark-01",
+    "captured_at": "2026-07-01T00:00:00Z",
+    "environment": {
+      "rainfall_mm_h": 35.0,
+      "water_level_cm": 4.0,
+      "secondary_water_level_cm": 4.0,
+      "rise_rate_cm_min": 0.2,
+      "sensor_confidence": 0.94
+    },
+    "vehicle": {
+      "occupants_clear": true,
+      "charging_disconnected": true,
+      "vehicle_healthy": true,
+      "positioning_online": true,
+      "network_online": true,
+      "emergency_operator_online": true,
+      "water_contact_triggered": false,
+      "motion_state": "PARKED"
+    },
+    "site": {
+      "route_dry": true,
+      "route_blocked": false
+    }
+  },
+  "scenarios": [
+    {
+      "id": "stay_clear",
+      "description": "Low rainfall and a long safe-start window keep the vehicle parked.",
+      "telemetry_patch": {},
+      "expected": {
+        "decision": "STAY",
+        "risk_level": "LOW",
+        "permission": "NONE",
+        "authorized_to_move": false,
+        "failed_gate_ids": []
+      }
+    },
+    {
+      "id": "watch_heavy_rain",
+      "description": "Heavy rain raises monitoring frequency while the timing window remains long.",
+      "telemetry_patch": {
+        "environment": {
+          "rainfall_mm_h": 65.0
+        }
+      },
+      "expected": {
+        "decision": "WATCH",
+        "risk_level": "MEDIUM",
+        "permission": "NONE",
+        "authorized_to_move": false,
+        "failed_gate_ids": []
+      }
+    },
+    {
+      "id": "prepare_window",
+      "description": "A narrowing safe-start window enters the preparation horizon.",
+      "telemetry_patch": {
+        "environment": {
+          "water_level_cm": 8.0,
+          "secondary_water_level_cm": 8.0,
+          "rise_rate_cm_min": 0.7
+        }
+      },
+      "expected": {
+        "decision": "PREPARE",
+        "risk_level": "MEDIUM",
+        "permission": "AWAITING_OWNER",
+        "authorized_to_move": false,
+        "failed_gate_ids": []
+      }
+    },
+    {
+      "id": "migrate_window",
+      "description": "A short positive safe-start window requires owner authorization.",
+      "telemetry_patch": {
+        "environment": {
+          "rainfall_mm_h": 96.0,
+          "water_level_cm": 14.0,
+          "secondary_water_level_cm": 13.5,
+          "rise_rate_cm_min": 1.0,
+          "sensor_confidence": 0.91
+        }
+      },
+      "expected": {
+        "decision": "MIGRATE_NOW",
+        "risk_level": "HIGH",
+        "permission": "AWAITING_OWNER",
+        "authorized_to_move": false,
+        "failed_gate_ids": []
+      }
+    },
+    {
+      "id": "verify_low_confidence",
+      "description": "Low sensor confidence permits an alert but denies movement authorization.",
+      "telemetry_patch": {
+        "environment": {
+          "sensor_confidence": 0.6
+        }
+      },
+      "expected": {
+        "decision": "VERIFY_ONLY",
+        "risk_level": "LOW",
+        "permission": "DENIED",
+        "authorized_to_move": false,
+        "failed_gate_ids": []
+      }
+    },
+    {
+      "id": "no_go_route_blocked",
+      "description": "A blocked route fails the route-open safety gate.",
+      "telemetry_patch": {
+        "site": {
+          "route_blocked": true
+        }
+      },
+      "expected": {
+        "decision": "NO_GO",
+        "risk_level": "HIGH",
+        "permission": "DENIED",
+        "authorized_to_move": false,
+        "failed_gate_ids": [
+          "route-open"
+        ]
+      }
+    },
+    {
+      "id": "no_go_water_threshold",
+      "description": "Water at the configured danger threshold is an immediate No-Go.",
+      "telemetry_patch": {
+        "environment": {
+          "rainfall_mm_h": 96.0,
+          "water_level_cm": 22.0,
+          "secondary_water_level_cm": 22.0,
+          "rise_rate_cm_min": 1.0
+        }
+      },
+      "expected": {
+        "decision": "NO_GO",
+        "risk_level": "CRITICAL",
+        "permission": "DENIED",
+        "authorized_to_move": false,
+        "failed_gate_ids": []
+      }
+    },
+    {
+      "id": "no_go_window_closed",
+      "description": "A dry route is still denied after the latest safe-start window closes.",
+      "telemetry_patch": {
+        "environment": {
+          "rainfall_mm_h": 96.0,
+          "water_level_cm": 16.0,
+          "secondary_water_level_cm": 16.0,
+          "rise_rate_cm_min": 1.0
+        }
+      },
+      "expected": {
+        "decision": "NO_GO",
+        "risk_level": "CRITICAL",
+        "permission": "DENIED",
+        "authorized_to_move": false,
+        "failed_gate_ids": []
+      }
+    },
+    {
+      "id": "emergency_stop_link_loss",
+      "description": "Loss of network while moving takes precedence and requests an emergency stop.",
+      "telemetry_patch": {
+        "vehicle": {
+          "network_online": false,
+          "motion_state": "MOVING"
+        }
+      },
+      "expected": {
+        "decision": "EMERGENCY_STOP",
+        "risk_level": "HIGH",
+        "permission": "DENIED",
+        "authorized_to_move": false,
+        "failed_gate_ids": [
+          "network"
+        ]
+      }
+    }
+  ]
+}

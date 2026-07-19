@@ -45,6 +45,22 @@ export function commandRequestCanContinue(
     && Boolean(ownerAuthorized);
 }
 
+export function isRecordOnlyCommandEvidence(command) {
+  return Boolean(
+    command
+    && typeof command.command_id === "string"
+    && command.command_id.length > 0
+    && command.status === "RECORDED_NOT_SENT"
+    && command.actuator_mode === "record-only"
+  );
+}
+
+export function recordedCommandPermissionText(command) {
+  return isRecordOnlyCommandEvidence(command)
+    ? "状态：命令已留痕 · 未向车辆发送"
+    : null;
+}
+
 export function telemetryResponseState(requestGeneration, latestGeneration, responseOk) {
   const current = requestGeneration === latestGeneration;
   return {
