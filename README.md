@@ -9,7 +9,7 @@
 ## 评审证据入口
 
 - [系统架构图](#系统结构)：场端、浏览器、FastAPI/SQLite 证据链与 P5 只读端的 Mermaid 数据流，并明确画出当前不存在的车辆执行链路。
-- [两分钟暴雨全流程 Demo](./docs/DEMO.md)：固定 120 秒时间线、一键脚本、逐步断言、带事件链 ID 与 SHA-256 的脱敏 HTTP 运行记录和录屏清单；当前尚未发布公开视频。
+- [两分钟暴雨全流程 Demo](./docs/DEMO.md)：固定 120 秒时间线、一键脚本、逐步断言、带事件链 ID 与 SHA-256 的脱敏 HTTP 运行记录；[v1.2.0 Release](https://github.com/zijin1337/xpeng-highground-ai/releases/tag/v1.2.0) 提供 MP4、manifest 和 evidence 下载。
 - [可复现 Benchmark](./docs/BENCHMARK.md)：9 个确定性场景覆盖全部 7 个决策码，并报告限定在本机 TestClient + 临时 SQLite 的 p50/p95。
 - [现有方案与小鹏能力对比](./docs/competition-comparison.md)：地磁、人工通知、传统闸门、泊车能力、涉水边界及官方资料来源。
 - [传感器与边缘网关成本模型](./docs/cost-model.md)：内部预算假设下，单站 3 年 TCO 为 `¥77,200`、10 站为 `¥924,000`；逐项 BOM、算式、未计价项和正式 RFQ 条件均可复核。
@@ -156,7 +156,7 @@ Windows 下从仓库根目录运行：
 .\demo\run_demo.ps1 -TimeScale 1
 ```
 
-脚本会启动本地 FastAPI，按 `0 / 20 / 45 / 70 / 85 / 90 / 105 / 115 / 120` 秒执行遥测、授权、命令留痕和证据查询，并断言最终为 `NO_GO`。快速回归可用 `-TimeScale 0`。完整时间线、录屏口径与证据字段见 [Demo 文档](./docs/DEMO.md)。当前仓库提供可复现录屏流程，但尚未发布 MP4、GitHub Release 或 B 站成片链接。
+脚本会启动本地 FastAPI，按 `0 / 20 / 45 / 70 / 85 / 90 / 105 / 115 / 120` 秒执行遥测、授权、命令留痕和证据查询，并断言最终为 `NO_GO`。快速回归可用 `-TimeScale 0`。完整时间线、录屏口径与证据字段见 [Demo 文档](./docs/DEMO.md)；已核验成片和脱敏运行记录见 [v1.2.0 GitHub Release](https://github.com/zijin1337/xpeng-highground-ai/releases/tag/v1.2.0)。
 
 ## 发送一条本地 HTTP 遥测
 

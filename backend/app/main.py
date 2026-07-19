@@ -87,7 +87,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "接收真实传感器遥测、持久化原始输入和决策证据、生成 Go/No-Go，"
             "并执行事件级单次授权校验。默认适配器只留痕，不向真实车辆发送指令。"
         ),
-        version="1.1.0",
+        version="1.2.0",
         lifespan=lifespan,
     )
     app.state.settings = settings

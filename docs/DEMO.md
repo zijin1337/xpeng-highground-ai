@@ -45,7 +45,7 @@ python -m venv .venv
 
 录制时同时展示运行终端和 `http://127.0.0.1:8000/`。终端使用 `-TimeScale 1` 跑满两分钟；网页连接本地后端后可展示当前事件及 SQLite 留痕。路线回放按钮只有收到 `RECORDED_NOT_SENT` 响应后才解锁，并持续标注“数字演示 / 未向车辆发令”。
 
-公开视频尚未发布时，README 应链接本页和场景清单，不使用一个不存在的视频地址。发布到 GitHub Release 或 B 站后，再把稳定链接补到 README。
+已核验的 120 秒 MP4、manifest 和脱敏 evidence 发布在 [v1.2.0 GitHub Release](https://github.com/zijin1337/xpeng-highground-ai/releases/tag/v1.2.0)。视频是本地 HTTP/SQLite 运行记录，不是 P5 实车试验录像。
 
 ## 生成本地 120 秒成片
 
@@ -68,7 +68,7 @@ python -m venv .venv
 
 脚本默认使用仓库中的 Web 控制台截图 `assets/highground-demo.png`。录制多个状态后，可把截图放进 `demo/artifacts/video-captures/`；脚本会按时间点自动选用存在的图片：`stay.png`、`watch.png`、`prepare.png`、`migrate.png`、`authorized.png`、`recorded.png`、`nogo.png`。缺少的状态会回退到相邻状态截图或默认截图；不会根据 evidence 伪造网页状态，也不会把截图里的旧事件号当成本轮证据。
 
-渲染结束后，同目录会生成 `rainstorm-p5-120s.manifest.json`，记录实际编码、像素格式、帧率、时长、分辨率、帧数、文件大小、MP4 SHA-256、evidence SHA-256、每张截图的 SHA-256，以及动态字段与截图各自的证据角色。MP4、manifest、运行 evidence 和状态截图均位于已被 Git 忽略的 `demo/artifacts/`，发布前应以 manifest 校验本地产物；只有实际上传后才填写公网链接。
+渲染结束后，同目录会生成 `rainstorm-p5-120s.manifest.json`，记录实际编码、像素格式、帧率、时长、分辨率、帧数、文件大小、MP4 SHA-256、evidence SHA-256、每张截图的 SHA-256，以及动态字段与截图各自的证据角色。MP4、manifest、运行 evidence 和状态截图均位于已被 Git 忽略的 `demo/artifacts/`；发布前应以 manifest 校验本地产物，公开副本见 [v1.2.0 Release](https://github.com/zijin1337/xpeng-highground-ai/releases/tag/v1.2.0)。
 
 ## 证据与隐私
 
