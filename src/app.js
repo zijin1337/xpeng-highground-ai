@@ -8,6 +8,7 @@ import {
   classifyApiFailure,
   commandRequestCanContinue,
   nextRequestGeneration,
+  recordedCommandPermissionText,
   telemetryResponseState,
 } from "./app-request-state.js";
 
@@ -76,6 +77,7 @@ const ids = [
   "play-migration-button", "animation-step", "animation-speed", "animation-progress",
   "animation-percent", "migration-route",
   "api-key-input", "api-connect-button", "api-status", "api-status-dot", "command-button",
+  "header-api-status",
 ];
 
 const el = Object.fromEntries(ids.map((id) => [id, document.getElementById(id)]));
@@ -91,6 +93,7 @@ let apiKey = "";
 let currentServerEventId = null;
 let telemetryRequestGeneration = 0;
 let commandRequestGeneration = 0;
+let recordedCommandId = null;
 
 function setCheckbox(element, checked) {
   element.checked = Boolean(checked);
@@ -98,6 +101,7 @@ function setCheckbox(element, checked) {
 
 function applyScenario(key) {
   if (apiMode) invalidatePendingTelemetry();
+  recordedCommandId = null;
   cancelMigrationAnimation({ resetVehicle: true });
   activeScenario = { ...(SCENARIOS[key] ?? SCENARIOS.normal) };
   el.rainfall.value = activeScenario.rainfallMmH;
@@ -281,6 +285,7 @@ function runDecision() {
 
 function stepOneMinute() {
   if (apiMode) invalidatePendingTelemetry();
+  recordedCommandId = null;
   cancelMigrationAnimation({ resetVehicle: true });
   const rise = Number(el["rise-rate"].value);
   el["water-level"].value = Math.min(30, Number(el["water-level"].value) + rise);
@@ -291,7 +296,7 @@ function stepOneMinute() {
 function setAnimationHud(step, speedKmh, progress) {
   const percent = Math.round(Math.min(1, Math.max(0, progress)) * 100);
   el["animation-step"].textContent = step;
-  el["animation-speed"].textContent = `${speedKmh.toFixed(1)} km/h`;
+  el["animation-speed"].textContent = `模拟 ${speedKmh.toFixed(1)} km/h`;
   el["animation-progress"].style.width = `${percent}%`;
   el["animation-percent"].textContent = `${percent}%`;
 }
@@ -307,12 +312,11 @@ function cancelMigrationAnimation({ resetVehicle = false } = {}) {
   isAnimating = false;
   el.vehicle.classList.remove("is-animating", "is-driving");
   el["migration-route"].classList.remove("is-active");
-  el["play-migration-button"].disabled = false;
-  el["play-migration-button"].innerHTML = '<span aria-hidden="true">▶</span> 播放迁移';
+  updateDigitalDemoAvailability();
   if (resetVehicle) {
     vehicleAtHighPoint = false;
     setVehiclePose(155, 235);
-    setAnimationHud("等待播放", 0, 0);
+    setAnimationHud(recordedCommandId ? "命令已留痕 · 可播放数字演示" : "尚无命令留痕", 0, 0);
   }
 }
 
@@ -337,25 +341,19 @@ function motionPose(progress) {
 }
 
 function animationPhase(progress) {
-  if (progress < 0.12) return { step: "安全闸逐项自检", speed: 0, moving: false };
-  if (progress < 0.22) return { step: "车主单次授权已确认", speed: 0, moving: false };
+  if (progress < 0.12) return { step: "数字演示：安全闸逐项自检", speed: 0, moving: false };
+  if (progress < 0.22) return { step: "数字演示：读取命令留痕", speed: 0, moving: false };
   if (progress < 0.78) {
     const moveProgress = (progress - 0.22) / 0.56;
     const speed = Math.max(1.2, 4.8 * Math.sin(moveProgress * Math.PI));
-    return { step: moveProgress < 0.58 ? "沿干燥路线低速迁移" : "进入坡道并持续监测", speed, moving: true, moveProgress };
+    return { step: moveProgress < 0.58 ? "数字演示：沿建议路线移动" : "数字演示：进入坡道", speed, moving: true, moveProgress };
   }
-  if (progress < 0.91) return { step: "到达高位点并锁车", speed: 0, moving: false };
-  return { step: "生成到达证据与事件留痕", speed: 0, moving: false };
+  if (progress < 0.91) return { step: "数字演示：到达高位点", speed: 0, moving: false };
+  return { step: "数字演示：完成路线回放", speed: 0, moving: false };
 }
 
 function playMigrationDemo() {
-  if (isAnimating) return;
-
-  el.scenario.value = "rising";
-  applyScenario("rising");
-  el["owner-authorized"].checked = true;
-  currentResult = runDecision();
-  if (currentResult.decision !== DECISIONS.MIGRATE_NOW || !currentResult.authorizedToMove) return;
+  if (isAnimating || !recordedCommandId) return;
 
   const runId = ++animationRunId;
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -367,17 +365,17 @@ function playMigrationDemo() {
   el.vehicle.classList.add("is-animating");
   el["migration-route"].classList.add("is-active");
   el["play-migration-button"].disabled = true;
-  el["play-migration-button"].textContent = "迁移进行中…";
+  el["play-migration-button"].textContent = "数字演示进行中…";
   el["scene-status-dot"].setAttribute("fill", "#1e7658");
+  el["scene-status-text"].textContent = "数字演示 · 未向车辆发令";
 
   if (reducedMotion) {
     isAnimating = false;
     vehicleAtHighPoint = true;
     setVehiclePose(760, 135, 0, 0.8);
-    setAnimationHud("迁移完成 · 已停入高位安全点", 0, 1);
-    el["scene-status-text"].textContent = "已到达高位安全点";
-    el["play-migration-button"].disabled = false;
-    el["play-migration-button"].innerHTML = '<span aria-hidden="true">↻</span> 重新播放';
+    setAnimationHud("数字路线演示完成 · 实车状态未知", 0, 1);
+    el["scene-status-text"].textContent = "演示完成 · 未向车辆发令";
+    updateDigitalDemoAvailability({ replay: true });
     return;
   }
 
@@ -406,19 +404,37 @@ function playMigrationDemo() {
     el.vehicle.classList.remove("is-animating", "is-driving");
     el["migration-route"].classList.remove("is-active");
     setVehiclePose(760, 135, 0, 0.8);
-    setAnimationHud("迁移完成 · 已停入高位安全点", 0, 1);
-    el["scene-status-text"].textContent = "已到达高位安全点";
-    el["play-migration-button"].disabled = false;
-    el["play-migration-button"].innerHTML = '<span aria-hidden="true">↻</span> 重新播放';
+    setAnimationHud("数字路线演示完成 · 实车状态未知", 0, 1);
+    el["scene-status-text"].textContent = "演示完成 · 未向车辆发令";
+    updateDigitalDemoAvailability({ replay: true });
   };
 
   animationFrameId = requestAnimationFrame(frame);
+}
+
+function updateDigitalDemoAvailability({ replay = false } = {}) {
+  const available = Boolean(recordedCommandId) && !isAnimating;
+  el["play-migration-button"].disabled = !available;
+  if (!available) {
+    el["play-migration-button"].textContent = "数字路线演示待解锁";
+    return;
+  }
+  el["play-migration-button"].innerHTML = replay
+    ? '<span aria-hidden="true">↻</span> 重播数字路线'
+    : '<span aria-hidden="true">▶</span> 数字路线演示';
 }
 
 function setApiStatus(state, text) {
   const container = el["api-status"].closest(".api-state");
   container.dataset.state = state;
   el["api-status"].textContent = text;
+  const header = el["header-api-status"].closest(".header-note");
+  header.dataset.state = state || "connecting";
+  el["header-api-status"].textContent = state === "connected"
+    ? "本地后端已连接"
+    : state === "error"
+      ? "本地后端未连接"
+      : "正在连接本地后端";
 }
 
 function responseDetail(text) {
@@ -464,13 +480,20 @@ function invalidateCurrentServerEvent() {
 function invalidatePendingTelemetry() {
   telemetryRequestGeneration = nextRequestGeneration(telemetryRequestGeneration);
   invalidateCurrentServerEvent();
+  recordedCommandId = null;
+  updateDigitalDemoAvailability();
   el["run-button"].disabled = false;
 }
 
 async function connectApi() {
   const candidate = el["api-key-input"].value.trim();
   if (!candidate) {
+    apiMode = false;
+    apiKey = "";
+    sessionStorage.removeItem("highground-api-key");
+    invalidatePendingTelemetry();
     setApiStatus("error", "请输入 X-API-Key");
+    updateCommandAvailability();
     return;
   }
   el["api-connect-button"].disabled = true;
@@ -492,6 +515,7 @@ async function connectApi() {
   } catch (error) {
     apiMode = false;
     apiKey = "";
+    sessionStorage.removeItem("highground-api-key");
     invalidatePendingTelemetry();
     setApiStatus("error", `后端连接失败 · ${error.message}`);
     updateCommandAvailability();
@@ -551,6 +575,10 @@ async function recordMigrationCommand() {
       throw await apiFailureFromResponse(commandResponse, "command");
     }
     const command = await commandResponse.json();
+    const recordedPermissionText = recordedCommandPermissionText(command);
+    if (!recordedPermissionText) {
+      throw new Error("后端未返回 RECORDED_NOT_SENT 留痕证据");
+    }
     if (!commandRequestCanContinue(
       requestGeneration,
       commandRequestGeneration,
@@ -559,9 +587,13 @@ async function recordMigrationCommand() {
       el["owner-authorized"].checked,
     )) return;
     invalidateCurrentServerEvent();
+    recordedCommandId = command.command_id;
     el["action-permission"].textContent = command.status;
+    el["permission-value"].textContent = recordedPermissionText;
     el["command-button"].textContent = `已留痕 ${command.command_id.slice(-8)}`;
-    setApiStatus("connected", "命令已真实写入 SQLite · 未发送车辆");
+    setApiStatus("connected", "命令已写入本地 SQLite · 未发送车辆");
+    setAnimationHud("命令已留痕 · 可播放数字演示", 0, 0);
+    updateDigitalDemoAvailability();
   } catch (error) {
     if (currentServerEventId !== eventId) return;
     if (error.invalidatesEvent) {
@@ -708,6 +740,7 @@ async function runApiDecision() {
 
 el.scenario.addEventListener("change", () => applyScenario(el.scenario.value));
 el["run-button"].addEventListener("click", async () => {
+  recordedCommandId = null;
   cancelMigrationAnimation({ resetVehicle: true });
   if (apiMode) {
     try {
@@ -727,6 +760,7 @@ el["command-button"].addEventListener("click", recordMigrationCommand);
 
 for (const input of document.querySelectorAll("#control-form input")) {
   input.addEventListener("input", () => {
+    recordedCommandId = null;
     cancelMigrationAnimation({ resetVehicle: true });
     updateOutputs();
     if (input.id === "owner-authorized" && apiMode) {

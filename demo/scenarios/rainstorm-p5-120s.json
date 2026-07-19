@@ -1,0 +1,163 @@
+{
+  "schema_version": 1,
+  "scenario_id": "rainstorm-p5-120s",
+  "title": "XPENG P5 地下车库暴雨全流程演示",
+  "duration_seconds": 120,
+  "vehicle_profile": {
+    "model": "XPENG P5",
+    "xmart_os_assumption": "3.6.1",
+    "sdk_basis": "Open-Xpeng community P5 XUI SDK 1.0.2",
+    "market": "UNVERIFIED",
+    "model_year": "UNVERIFIED",
+    "hardware_configuration": "UNVERIFIED",
+    "vehicle_validation": "NOT_PERFORMED"
+  },
+  "site_id": "garage-demo-competition-01",
+  "vehicle_id": "vehicle-p5-demo-01",
+  "source_id": "edge-gateway-demo-01",
+  "base_vehicle": {
+    "occupants_clear": true,
+    "charging_disconnected": true,
+    "vehicle_healthy": true,
+    "positioning_online": true,
+    "network_online": true,
+    "emergency_operator_online": true,
+    "water_contact_triggered": false,
+    "motion_state": "PARKED"
+  },
+  "base_site": {
+    "route_dry": true,
+    "route_blocked": false
+  },
+  "steps": [
+    {
+      "at_seconds": 0,
+      "name": "日常守望",
+      "action": "telemetry",
+      "environment": {
+        "rainfall_mm_h": 35,
+        "water_level_cm": 4,
+        "secondary_water_level_cm": 4,
+        "rise_rate_cm_min": 0.2,
+        "sensor_confidence": 0.94
+      },
+      "expect": {
+        "http_status": 201,
+        "decision": "STAY",
+        "risk_level": "LOW",
+        "permission": "NONE"
+      }
+    },
+    {
+      "at_seconds": 20,
+      "name": "强降雨增强监测",
+      "action": "telemetry",
+      "environment": {
+        "rainfall_mm_h": 65,
+        "water_level_cm": 6,
+        "secondary_water_level_cm": 6.2,
+        "rise_rate_cm_min": 0.5,
+        "sensor_confidence": 0.93
+      },
+      "expect": {
+        "http_status": 201,
+        "decision": "WATCH",
+        "risk_level": "MEDIUM",
+        "permission": "NONE"
+      }
+    },
+    {
+      "at_seconds": 45,
+      "name": "进入迁移准备窗口",
+      "action": "telemetry",
+      "environment": {
+        "rainfall_mm_h": 88,
+        "water_level_cm": 10,
+        "secondary_water_level_cm": 10.2,
+        "rise_rate_cm_min": 0.7,
+        "sensor_confidence": 0.92
+      },
+      "expect": {
+        "http_status": 201,
+        "decision": "PREPARE",
+        "risk_level": "MEDIUM",
+        "permission": "AWAITING_OWNER"
+      }
+    },
+    {
+      "at_seconds": 70,
+      "name": "最晚安全窗口触发立即迁移建议",
+      "action": "telemetry",
+      "environment": {
+        "rainfall_mm_h": 96,
+        "water_level_cm": 14,
+        "secondary_water_level_cm": 13.5,
+        "rise_rate_cm_min": 1,
+        "sensor_confidence": 0.91
+      },
+      "expect": {
+        "http_status": 201,
+        "decision": "MIGRATE_NOW",
+        "risk_level": "HIGH",
+        "permission": "AWAITING_OWNER"
+      }
+    },
+    {
+      "at_seconds": 85,
+      "name": "车主确认当前事件的单次授权",
+      "action": "authorize",
+      "owner_id": "owner-competition-demo",
+      "expect": {
+        "http_status": 201
+      }
+    },
+    {
+      "at_seconds": 90,
+      "name": "执行前重算并记录迁移命令",
+      "action": "command",
+      "expect": {
+        "http_status": 202,
+        "status": "RECORDED_NOT_SENT",
+        "actuator_mode": "record-only"
+      }
+    },
+    {
+      "at_seconds": 105,
+      "name": "读取可审计事件证据",
+      "action": "events",
+      "expect": {
+        "http_status": 200,
+        "minimum_count": 4
+      }
+    },
+    {
+      "at_seconds": 115,
+      "name": "禁行阈值关闭安全窗口",
+      "action": "telemetry",
+      "environment": {
+        "rainfall_mm_h": 108,
+        "water_level_cm": 22,
+        "secondary_water_level_cm": 22.3,
+        "rise_rate_cm_min": 1.2,
+        "sensor_confidence": 0.9
+      },
+      "expect": {
+        "http_status": 201,
+        "decision": "NO_GO",
+        "risk_level": "CRITICAL",
+        "permission": "DENIED"
+      }
+    },
+    {
+      "at_seconds": 120,
+      "name": "确认最新状态为 No-Go",
+      "action": "latest",
+      "expect": {
+        "http_status": 200,
+        "decision": "NO_GO",
+        "risk_level": "CRITICAL",
+        "permission": "DENIED"
+      }
+    }
+  ]
+}

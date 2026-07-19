@@ -20,11 +20,11 @@
           <p>XPENG P5 · Flood Safety Console</p>
         </div>
       </div>
-      <div class="header-note">
+      <div class="header-note" data-state="offline">
         <span class="live-dot" aria-hidden="true"></span>
-        场端决策节点在线
+        <span id="header-api-status">本地后端未连接</span>
         <span class="header-divider" aria-hidden="true"></span>
-        record-only
+        record-only 模式
       </div>
     </div>
   </header>
@@ -32,7 +32,7 @@
   <main id="main">
     <section class="console-heading" aria-labelledby="console-title">
       <div>
-        <p class="section-kicker">B1 北区 · 实时态势</p>
+        <p class="section-kicker">B1 北区 · 演示场景</p>
         <h2 id="console-title">地下车库风险控制台</h2>
       </div>
       <dl class="console-meta">
@@ -55,7 +55,7 @@
         <p id="decision-reason" class="decision-reason" role="status" aria-live="polite"></p>
         <p id="permission-value" class="permission-value">权限：无需移动</p>
 
-        <div class="status-grid" aria-label="实时决策摘要">
+        <div class="status-grid" aria-label="当前决策摘要">
           <div class="status-card">
             <span>最晚安全启动</span>
             <strong id="latest-start-value">--</strong>
@@ -77,11 +77,11 @@
       <section class="simulator" aria-labelledby="simulator-title">
         <div class="section-heading">
           <div>
-            <p class="panel-label">场景解释</p>
-            <h3 id="simulator-title">车库剖面与迁移路线</h3>
+            <p class="panel-label">数字沙盘 · 非车辆状态</p>
+            <h3 id="simulator-title">车库剖面与建议路线</h3>
           </div>
-          <button id="play-migration-button" class="button animation-button" type="button">
-            <span aria-hidden="true">▶</span> 播放迁移
+          <button id="play-migration-button" class="button animation-button" type="button" disabled>
+            数字路线演示待解锁
           </button>
         </div>
 
@@ -155,8 +155,8 @@
 
           <div class="migration-hud" aria-live="polite">
             <div class="migration-stage">
-              <span id="animation-step">等待播放</span>
-              <strong id="animation-speed">0.0 km/h</strong>
+              <span id="animation-step">尚无命令留痕</span>
+              <strong id="animation-speed">模拟 0.0 km/h</strong>
             </div>
             <div class="progress-track" aria-hidden="true"><span id="animation-progress"></span></div>
             <span id="animation-percent">0%</span>
@@ -201,7 +201,7 @@
           </div>
           <label for="api-key-input">后端 X-API-Key</label>
           <input id="api-key-input" type="password" autocomplete="off" placeholder="输入 API Key">
-          <button id="api-connect-button" class="button" type="button">连接真实后端</button>
+          <button id="api-connect-button" class="button" type="button">连接本地后端</button>
           <p class="api-note">连接后，运行决策会将遥测与证据写入 SQLite。</p>
         </div>
       </aside>

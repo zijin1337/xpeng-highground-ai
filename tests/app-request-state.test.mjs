@@ -5,9 +5,39 @@ import {
   STALE_EVENT_MESSAGE,
   classifyApiFailure,
   commandRequestCanContinue,
+  isRecordOnlyCommandEvidence,
   nextRequestGeneration,
+  recordedCommandPermissionText,
   telemetryResponseState,
 } from "../src/app-request-state.js";
+
+test("只有 record-only 且未发送车辆的命令响应可解锁数字路线演示", () => {
+  const recordedCommand = {
+    command_id: "cmd_demo",
+    status: "RECORDED_NOT_SENT",
+    actuator_mode: "record-only",
+  };
+  assert.equal(isRecordOnlyCommandEvidence(recordedCommand), true);
+  assert.equal(
+    recordedCommandPermissionText(recordedCommand),
+    "状态：命令已留痕 · 未向车辆发送",
+  );
+  assert.equal(isRecordOnlyCommandEvidence({
+    command_id: "cmd_demo",
+    status: "SENT",
+    actuator_mode: "record-only",
+  }), false);
+  assert.equal(isRecordOnlyCommandEvidence({
+    command_id: "cmd_demo",
+    status: "RECORDED_NOT_SENT",
+    actuator_mode: "vehicle-control",
+  }), false);
+  assert.equal(recordedCommandPermissionText({
+    command_id: "cmd_demo",
+    status: "SENT",
+    actuator_mode: "record-only",
+  }), null);
+});
 
 test("遥测、授权和命令的 409 都归类为事件失效", () => {
   for (const operation of ["telemetry", "authorization", "command"]) {
