@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse
 from fastapi.security import APIKeyHeader
 from fastapi.staticfiles import StaticFiles
 
-from .actuator import build_actuator
+from .actuator import RecordOnlyActuator, build_actuator
 from .config import REPO_ROOT, Settings
 from .database import (
     Database,
@@ -35,6 +35,8 @@ from .models import (
 
 API_PREFIX = "/api/v1"
 LATEST_RESPONSE_HEADERS = {"Cache-Control": "private, no-store"}
+RECORD_ONLY_STATUS = "RECORDED_NOT_SENT"
+RECORD_ONLY_MODE = "record-only"
 
 
 def _event_response(event: StoredEvent) -> TelemetryDecisionResponse:
@@ -69,11 +71,45 @@ def _event_is_stale(
     return (current_time - event.received_at).total_seconds() > max_age_seconds
 
 
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _verified_record_only_actuator(actuator: object) -> bool:
+    # Exact type matching prevents a subclass with an unreviewed side effect
+    # from being accepted as the record-only safety boundary.
+    return type(actuator) is RecordOnlyActuator
+
+
+def _capture_time_error(
+    payload: TelemetryIn,
+    settings: Settings,
+    *,
+    now: datetime,
+) -> str | None:
+    if "captured_at" not in payload.model_fields_set:
+        return None
+    age_seconds = (now - payload.captured_at).total_seconds()
+    if age_seconds > settings.capture_max_age_seconds:
+        return (
+            "captured_at is older than the configured maximum age "
+            f"({settings.capture_max_age_seconds}s)"
+        )
+    if age_seconds < -settings.capture_future_tolerance_seconds:
+        return (
+            "captured_at is ahead of server time beyond the configured tolerance "
+            f"({settings.capture_future_tolerance_seconds}s)"
+        )
+    return None
+
+
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings.from_env()
     settings.validate()
     database = Database(settings.database_path)
     actuator = build_actuator(settings.actuator_mode)
+    if settings.actuator_mode == RECORD_ONLY_MODE and not _verified_record_only_actuator(actuator):
+        raise RuntimeError("record-only mode requires the verified RecordOnlyActuator")
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
@@ -118,6 +154,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def health() -> HealthResponse:
         if not database.health():
             raise HTTPException(status_code=503, detail="Database unavailable")
+        if settings.actuator_mode == RECORD_ONLY_MODE and not _verified_record_only_actuator(
+            app.state.actuator
+        ):
+            raise HTTPException(status_code=503, detail="Record-only actuator verification failed")
         return HealthResponse(status="ok", database="ok", actuator_mode=settings.actuator_mode)
 
     @app.get(f"{API_PREFIX}/policy", tags=["decision"])
@@ -144,6 +184,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         response: Response,
         _: str = Security(require_api_key),
     ) -> TelemetryDecisionResponse:
+        capture_error = _capture_time_error(payload, settings, now=_utc_now())
+        if capture_error and not database.has_message_id(payload.message_id):
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=capture_error)
         result = evaluate_decision(payload, settings.policy)
         try:
             event = database.save_telemetry_and_decision(payload, result)
@@ -257,8 +300,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         request: MigrationCommandRequest,
         _: str = Security(require_api_key),
     ) -> CommandResponse:
+        active_actuator = app.state.actuator
         if settings.actuator_mode == "disabled":
             raise HTTPException(status_code=503, detail="Vehicle actuation is disabled")
+        if settings.actuator_mode != RECORD_ONLY_MODE or not _verified_record_only_actuator(
+            active_actuator
+        ):
+            raise HTTPException(status_code=503, detail="Verified record-only actuator is required")
 
         event = database.get_event(request.event_id)
         if not event:
@@ -275,18 +323,32 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if reevaluated.decision != DecisionCode.MIGRATE_NOW or not reevaluated.authorized_to_move:
             raise HTTPException(status_code=409, detail="Fresh safety evaluation denied migration")
 
-        # Only the side-effect-free record-only adapter can reach this branch.
-        actuator_result = actuator.migrate_to_high_point(
+        token_sha256 = hashlib.sha256(request.authorization_token.encode("utf-8")).hexdigest()
+        if not database.authorization_is_valid(
+            event_id=event.event_id,
+            token_sha256=token_sha256,
+            now=now,
+        ):
+            raise HTTPException(status_code=401, detail="Authorization is invalid, expired, or already used")
+
+        # The exact-type gate proves this call is the side-effect-free adapter.
+        # The atomic consume below remains the final authority under races.
+        actuator_result = active_actuator.migrate_to_high_point(
             event_id=event.event_id,
             vehicle_id=event.telemetry.vehicle_id,
         )
-        token_sha256 = hashlib.sha256(request.authorization_token.encode("utf-8")).hexdigest()
+        if (
+            actuator_result.status != RECORD_ONLY_STATUS
+            or actuator_result.mode != RECORD_ONLY_MODE
+            or actuator_result.details.get("transmitted") is not False
+        ):
+            raise RuntimeError("Record-only actuator returned an unverifiable result")
         try:
             command_id = database.record_authorized_command(
                 event_id=event.event_id,
                 token_sha256=token_sha256,
                 now=now,
-                status=actuator_result.status,
+                status=RECORD_ONLY_STATUS,
                 response=actuator_result.details,
             )
         except EventSupersededError as error:
@@ -296,8 +358,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return CommandResponse(
             command_id=command_id,
             event_id=event.event_id,
-            status="RECORDED_NOT_SENT",
-            actuator_mode="record-only",
+            status=RECORD_ONLY_STATUS,
+            actuator_mode=RECORD_ONLY_MODE,
             message=actuator_result.message,
         )
 

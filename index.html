@@ -194,8 +194,8 @@
           <button id="step-button" class="button" type="button">推进 1 分钟</button>
         </div>
 
-        <div class="api-connection">
-          <div class="api-state">
+        <div class="api-connection" aria-busy="false">
+          <div class="api-state" role="status" aria-live="polite" aria-atomic="true">
             <span id="api-status-dot" aria-hidden="true"></span>
             <strong id="api-status">本地决策模式</strong>
           </div>

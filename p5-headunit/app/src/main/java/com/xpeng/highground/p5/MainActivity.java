@@ -50,7 +50,9 @@ public final class MainActivity extends Activity {
     private Button stopButton;
     private HighGroundMonitorService service;
     private HighGroundMonitorService.LocalBinder serviceBinder;
-    private boolean bound;
+    private boolean activityStarted;
+    private boolean bindingRequested;
+    private boolean callbackRegistered;
     private boolean monitoring;
 
     @Override
@@ -102,20 +104,40 @@ public final class MainActivity extends Activity {
     @Override
     protected void onStart() {
         super.onStart();
-        Intent intent = new Intent(this, HighGroundMonitorService.class);
-        bindService(intent, connection, Context.BIND_AUTO_CREATE);
+        activityStarted = true;
+        bindMonitorService();
     }
 
     @Override
     protected void onStop() {
-        if (bound) {
-            serviceBinder.unregister(uiCallback);
-            unbindService(connection);
-            bound = false;
-            service = null;
-            serviceBinder = null;
-        }
+        activityStarted = false;
+        releaseMonitorServiceBinding();
         super.onStop();
+    }
+
+    private void bindMonitorService() {
+        if (bindingRequested) {
+            return;
+        }
+        Intent intent = new Intent(this, HighGroundMonitorService.class);
+        bindingRequested = bindService(intent, connection, Context.BIND_AUTO_CREATE);
+    }
+
+    private void releaseMonitorServiceBinding() {
+        clearConnectedService(true);
+        if (bindingRequested) {
+            unbindService(connection);
+            bindingRequested = false;
+        }
+    }
+
+    private void clearConnectedService(boolean unregisterCallback) {
+        if (unregisterCallback && callbackRegistered && serviceBinder != null) {
+            serviceBinder.unregister(uiCallback);
+        }
+        callbackRegistered = false;
+        service = null;
+        serviceBinder = null;
     }
 
     private void startMonitor() {
@@ -317,17 +339,32 @@ public final class MainActivity extends Activity {
     private final ServiceConnection connection = new ServiceConnection() {
         @Override
         public void onServiceConnected(ComponentName name, IBinder binder) {
+            if (!activityStarted || !bindingRequested) {
+                return;
+            }
             serviceBinder = (HighGroundMonitorService.LocalBinder) binder;
             service = serviceBinder.service();
             serviceBinder.register(uiCallback);
-            bound = true;
+            callbackRegistered = true;
         }
 
         @Override
         public void onServiceDisconnected(ComponentName name) {
-            bound = false;
-            service = null;
-            serviceBinder = null;
+            clearConnectedService(true);
+        }
+
+        @Override
+        public void onBindingDied(ComponentName name) {
+            boolean shouldRebind = activityStarted;
+            releaseMonitorServiceBinding();
+            if (shouldRebind) {
+                bindMonitorService();
+            }
+        }
+
+        @Override
+        public void onNullBinding(ComponentName name) {
+            releaseMonitorServiceBinding();
         }
     };
 

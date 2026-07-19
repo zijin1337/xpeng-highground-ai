@@ -17,6 +17,25 @@ def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def canonical_telemetry_json(telemetry: TelemetryIn | dict[str, object]) -> str:
+    normalized = TelemetryIn.model_validate(telemetry)
+    canonical_payload = normalized.model_dump(mode="json")
+    # A server-generated capture time is not part of the client's retry payload.
+    if "captured_at" not in normalized.model_fields_set:
+        canonical_payload.pop("captured_at", None)
+    return json.dumps(
+        canonical_payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+
+
+def telemetry_input_sha256(telemetry: TelemetryIn | dict[str, object]) -> str:
+    canonical_json = canonical_telemetry_json(telemetry)
+    return hashlib.sha256(canonical_json.encode("utf-8")).hexdigest()
+
+
 @dataclass(frozen=True)
 class StoredEvent:
     event_id: str
@@ -133,6 +152,34 @@ class Database:
             row = connection.execute("SELECT 1 AS ok").fetchone()
         return bool(row and row["ok"] == 1)
 
+    def has_message_id(self, message_id: str) -> bool:
+        with self._connection() as connection:
+            row = connection.execute(
+                "SELECT 1 FROM telemetry WHERE message_id = ? LIMIT 1",
+                (message_id,),
+            ).fetchone()
+        return row is not None
+
+    def authorization_is_valid(
+        self,
+        *,
+        event_id: str,
+        token_sha256: str,
+        now: datetime,
+    ) -> bool:
+        with self._connection() as connection:
+            row = connection.execute(
+                """
+                SELECT 1
+                FROM authorizations
+                WHERE event_id = ? AND token_sha256 = ?
+                  AND used_at IS NULL AND expires_at > ?
+                LIMIT 1
+                """,
+                (event_id, token_sha256, now.isoformat()),
+            ).fetchone()
+        return row is not None
+
     @staticmethod
     def _row_to_event(row: sqlite3.Row, *, duplicate: bool = False) -> StoredEvent:
         return StoredEvent(
@@ -204,17 +251,7 @@ class Database:
         result: DecisionOutput,
     ) -> StoredEvent:
         payload_json = telemetry.model_dump_json()
-        canonical_payload = telemetry.model_dump(mode="json")
-        # A server-generated capture time is not part of the client's retry payload.
-        if "captured_at" not in telemetry.model_fields_set:
-            canonical_payload.pop("captured_at", None)
-        canonical_json = json.dumps(
-            canonical_payload,
-            ensure_ascii=False,
-            sort_keys=True,
-            separators=(",", ":"),
-        )
-        input_sha256 = hashlib.sha256(canonical_json.encode("utf-8")).hexdigest()
+        input_sha256 = telemetry_input_sha256(telemetry)
         result_json = result.model_dump_json()
         received_at = _utc_now()
         event_id = f"evt_{uuid4().hex}"

@@ -20,6 +20,8 @@ MANAGED_ENVIRONMENT = (
     "HIGHGROUND_ACTUATOR_MODE",
     "HIGHGROUND_AUTH_TTL_SECONDS",
     "HIGHGROUND_EVENT_MAX_AGE_SECONDS",
+    "HIGHGROUND_CAPTURE_MAX_AGE_SECONDS",
+    "HIGHGROUND_CAPTURE_FUTURE_TOLERANCE_SECONDS",
     "HIGHGROUND_ALLOWED_ORIGINS",
     "PYTHONUTF8",
 )
@@ -83,6 +85,8 @@ def test_launcher_runs_real_http_demo_in_an_isolated_environment(tmp_path: Path)
         "HIGHGROUND_ACTUATOR_MODE": "disabled",
         "HIGHGROUND_AUTH_TTL_SECONDS": "not-an-integer",
         "HIGHGROUND_EVENT_MAX_AGE_SECONDS": "also-not-an-integer",
+        "HIGHGROUND_CAPTURE_MAX_AGE_SECONDS": "yet-another-invalid-value",
+        "HIGHGROUND_CAPTURE_FUTURE_TOLERANCE_SECONDS": "invalid-clock-skew",
         "HIGHGROUND_ALLOWED_ORIGINS": None,
         "PYTHONUTF8": "0",
     }

@@ -7,6 +7,7 @@ import {
 import {
   classifyApiFailure,
   commandRequestCanContinue,
+  connectionResponseCanCommit,
   nextRequestGeneration,
   recordedCommandPermissionText,
   telemetryResponseState,
@@ -93,6 +94,7 @@ let apiKey = "";
 let currentServerEventId = null;
 let telemetryRequestGeneration = 0;
 let commandRequestGeneration = 0;
+let connectionRequestGeneration = 0;
 let recordedCommandId = null;
 
 function setCheckbox(element, checked) {
@@ -100,7 +102,7 @@ function setCheckbox(element, checked) {
 }
 
 function applyScenario(key) {
-  if (apiMode) invalidatePendingTelemetry();
+  if (apiMode) markApiInputsDirty();
   recordedCommandId = null;
   cancelMigrationAnimation({ resetVehicle: true });
   activeScenario = { ...(SCENARIOS[key] ?? SCENARIOS.normal) };
@@ -284,7 +286,7 @@ function runDecision() {
 }
 
 function stepOneMinute() {
-  if (apiMode) invalidatePendingTelemetry();
+  if (apiMode) markApiInputsDirty();
   recordedCommandId = null;
   cancelMigrationAnimation({ resetVehicle: true });
   const rise = Number(el["rise-rate"].value);
@@ -485,18 +487,38 @@ function invalidatePendingTelemetry() {
   el["run-button"].disabled = false;
 }
 
+function markApiInputsDirty() {
+  if (!apiMode) return;
+  invalidatePendingTelemetry();
+  setApiStatus("connected", "API 已连接 · 参数待提交");
+}
+
+function disconnectApi(statusText) {
+  apiMode = false;
+  apiKey = "";
+  sessionStorage.removeItem("highground-api-key");
+  invalidatePendingTelemetry();
+  setApiStatus("error", statusText);
+  updateCommandAvailability();
+}
+
+function setConnectionPending(pending) {
+  const container = el["api-key-input"].closest(".api-connection");
+  el["api-key-input"].disabled = pending;
+  el["api-connect-button"].disabled = pending;
+  container.setAttribute("aria-busy", String(pending));
+}
+
 async function connectApi() {
+  connectionRequestGeneration = nextRequestGeneration(connectionRequestGeneration);
+  const requestGeneration = connectionRequestGeneration;
   const candidate = el["api-key-input"].value.trim();
   if (!candidate) {
-    apiMode = false;
-    apiKey = "";
-    sessionStorage.removeItem("highground-api-key");
-    invalidatePendingTelemetry();
-    setApiStatus("error", "请输入 X-API-Key");
-    updateCommandAvailability();
+    disconnectApi("请输入 X-API-Key");
+    setConnectionPending(false);
     return;
   }
-  el["api-connect-button"].disabled = true;
+  setConnectionPending(true);
   setApiStatus("", "正在连接后端…");
   try {
     const response = await fetch("/api/v1/session", {
@@ -504,6 +526,17 @@ async function connectApi() {
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const session = await response.json();
+    if (!connectionResponseCanCommit(
+      requestGeneration,
+      connectionRequestGeneration,
+      candidate,
+      el["api-key-input"].value,
+    )) {
+      if (requestGeneration === connectionRequestGeneration) {
+        disconnectApi("API Key 已变更，请重新连接");
+      }
+      return;
+    }
     apiMode = true;
     apiKey = candidate;
     invalidatePendingTelemetry();
@@ -513,14 +546,20 @@ async function connectApi() {
     el["api-connect-button"].textContent = "重新连接";
     updateCommandAvailability();
   } catch (error) {
-    apiMode = false;
-    apiKey = "";
-    sessionStorage.removeItem("highground-api-key");
-    invalidatePendingTelemetry();
-    setApiStatus("error", `后端连接失败 · ${error.message}`);
-    updateCommandAvailability();
+    if (!connectionResponseCanCommit(
+      requestGeneration,
+      connectionRequestGeneration,
+      candidate,
+      el["api-key-input"].value,
+    )) {
+      if (requestGeneration === connectionRequestGeneration) {
+        disconnectApi("API Key 已变更，请重新连接");
+      }
+      return;
+    }
+    disconnectApi(`后端连接失败 · ${error.message}`);
   } finally {
-    el["api-connect-button"].disabled = false;
+    if (requestGeneration === connectionRequestGeneration) setConnectionPending(false);
   }
 }
 
@@ -596,6 +635,10 @@ async function recordMigrationCommand() {
     updateDigitalDemoAvailability();
   } catch (error) {
     if (currentServerEventId !== eventId) return;
+    if (error.invalidatesSession) {
+      disconnectApi(error.message);
+      return;
+    }
     if (error.invalidatesEvent) {
       invalidateCurrentServerEvent();
       setApiStatus("error", error.message);
@@ -726,10 +769,14 @@ async function runApiDecision() {
       telemetryRequestGeneration,
       false,
     ).current) return null;
-    if (error.invalidatesEvent) invalidateCurrentServerEvent();
-    setApiStatus("error", error.invalidatesEvent
-      ? error.message
-      : `遥测提交失败 · ${error.message}`);
+    if (error.invalidatesSession) {
+      disconnectApi(error.message);
+    } else {
+      if (error.invalidatesEvent) invalidateCurrentServerEvent();
+      setApiStatus("error", error.invalidatesEvent
+        ? error.message
+        : `遥测提交失败 · ${error.message}`);
+    }
     throw error;
   } finally {
     if (requestGeneration === telemetryRequestGeneration) {
@@ -772,9 +819,8 @@ for (const input of document.querySelectorAll("#control-form input")) {
       updateCommandAvailability();
       return;
     }
-    if (apiMode) invalidatePendingTelemetry();
+    if (apiMode) markApiInputsDirty();
     runDecision();
-    if (apiMode) setApiStatus("connected", "API 已连接 · 参数待提交");
   });
 }
 
