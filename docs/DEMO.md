@@ -25,7 +25,7 @@ $env:HIGHGROUND_ACTUATOR_MODE = "record-only"
 3. 点击“推进下一阶段”进入第 5 阶段。高位点容量从 2 个缩到 1 个，只保留 1 辆 `SCHEDULED_SHADOW`，其余候选形成可审计的 `NO_CAPACITY` 拒绝。
 4. 再推进到第 6 阶段。批次间隔使第二批错过最后安全窗口，`p5-02` 变为 `WINDOW_CLOSED`，但系统不会用后续车辆回填已关闭窗口。
 5. 在未连接 API 时检查审计区：run ID、输入 SHA-256 和计划 SHA-256 均为破折号，来源标签为 `SIMULATED · 浏览器规划 · 不写 SQLite`。
-6. 在“SQLite 连接”输入 `fleet-review-local-key`，点击“连接 SQLite 证据”。页面会自动提交当前阶段；成功后显示 `fleet_` 开头的 run ID、输入 SHA-256、计划 SHA-256 和 `SQLite API 证据` 标签。
+6. 在“SQLite 连接”输入 `fleet-review-local-key`，点击“连接 SQLite 证据”。页面会自动提交当前阶段；成功后显示 `fleet_` 开头的 run ID、输入 SHA-256、计划 SHA-256 和 `SIMULATED · SQLite 证据` 标签。
 7. 切换阶段后，旧服务端证据先标为 `SQLite 证据已过期 · 待提交新快照`，直到当前快照返回。任何时刻逐车字段 `authorized_to_move` 都必须为 `false`。
 8. 切换到“单车安全决策”标签，确认既有控制台仍可本地运行。Fleet Shadow 的 API 会话不会把车主授权或命令能力带入车队规划。
 

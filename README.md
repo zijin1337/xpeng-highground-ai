@@ -111,7 +111,7 @@ flowchart TB
 | 页面状态 | 标签和证据 | 含义 |
 |---|---|---|
 | 未连接 API | `SIMULATED · 浏览器规划 · 不写 SQLite`；run ID/哈希显示破折号 | JavaScript 本地规划，只用于可解释回放 |
-| API 已连接并提交 | `SQLite API 证据`；显示真实 `fleet_` run ID 与两项 SHA-256 | 本机 FastAPI/SQLite 持久化结果 |
+| API 已连接并提交 | `SIMULATED · SQLite 证据`；显示真实 `fleet_` run ID 与两项 SHA-256 | 本机 FastAPI/SQLite 持久化结果 |
 | API 断开或阶段已变化 | `SQLite 证据已过期 · 待提交新快照` | 保留上一份服务端结果，但不与当前浏览器计划混合 |
 
 六车数据来自仓库内置的模拟 JSON，并非真实 P5、真实停车场或现场传感器采集，也不使用训练模型。完整评审路径见 [Demo 文档](./docs/DEMO.md#fleet-shadow-六车评审流程)。
