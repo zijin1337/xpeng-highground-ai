@@ -10,6 +10,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
+from .fleet_models import FleetPlan, FleetSnapshot
+from .fleet_planner import canonical_fleet_snapshot_json, fleet_input_sha256
 from .models import DecisionOutput, TelemetryIn
 
 
@@ -47,12 +49,23 @@ class StoredEvent:
     duplicate: bool = False
 
 
+@dataclass(frozen=True)
+class StoredFleetRun:
+    plan: FleetPlan
+    received_at: datetime
+    duplicate: bool = False
+
+
 class MessageIdConflictError(RuntimeError):
     pass
 
 
 class EventSupersededError(RuntimeError):
     pass
+
+
+class FleetSnapshotConflictError(RuntimeError):
+    """Raised when one snapshot ID is reused for different canonical input."""
 
 
 class Database:
@@ -128,10 +141,41 @@ class Database:
                     FOREIGN KEY (authorization_id) REFERENCES authorizations(authorization_id)
                 );
 
+                CREATE TABLE IF NOT EXISTS fleet_runs (
+                    run_id TEXT PRIMARY KEY,
+                    snapshot_id TEXT NOT NULL UNIQUE,
+                    site_id TEXT NOT NULL,
+                    source_mode TEXT NOT NULL CHECK (source_mode IN ('SIMULATED', 'SHADOW')),
+                    captured_at TEXT NOT NULL,
+                    received_at TEXT NOT NULL,
+                    planner_version TEXT NOT NULL,
+                    input_json TEXT NOT NULL,
+                    input_sha256 TEXT NOT NULL,
+                    plan_json TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS fleet_vehicle_plans (
+                    run_id TEXT NOT NULL,
+                    vehicle_id TEXT NOT NULL,
+                    base_decision_json TEXT NOT NULL,
+                    allocation_status TEXT NOT NULL,
+                    rank INTEGER,
+                    batch_index INTEGER,
+                    queue_ahead INTEGER,
+                    safe_point_id TEXT,
+                    action_permission TEXT NOT NULL,
+                    authorized_to_move INTEGER NOT NULL CHECK (authorized_to_move = 0),
+                    reason TEXT NOT NULL,
+                    PRIMARY KEY (run_id, vehicle_id),
+                    FOREIGN KEY (run_id) REFERENCES fleet_runs(run_id) ON DELETE CASCADE
+                );
+
                 CREATE INDEX IF NOT EXISTS idx_telemetry_site_vehicle_received
                     ON telemetry(site_id, vehicle_id, received_at DESC);
                 CREATE INDEX IF NOT EXISTS idx_authorizations_event
                     ON authorizations(event_id, expires_at DESC);
+                CREATE INDEX IF NOT EXISTS idx_fleet_runs_site_received
+                    ON fleet_runs(site_id, received_at DESC);
                 """
             )
             telemetry_columns = {
@@ -157,6 +201,14 @@ class Database:
             row = connection.execute(
                 "SELECT 1 FROM telemetry WHERE message_id = ? LIMIT 1",
                 (message_id,),
+            ).fetchone()
+        return row is not None
+
+    def has_fleet_snapshot_id(self, snapshot_id: str) -> bool:
+        with self._connection() as connection:
+            row = connection.execute(
+                "SELECT 1 FROM fleet_runs WHERE snapshot_id = ? LIMIT 1",
+                (snapshot_id,),
             ).fetchone()
         return row is not None
 
@@ -189,6 +241,21 @@ class Database:
             input_sha256=row["input_sha256"],
             telemetry=TelemetryIn.model_validate_json(row["payload_json"]),
             result=DecisionOutput.model_validate_json(row["result_json"]),
+            duplicate=duplicate,
+        )
+
+    @staticmethod
+    def _row_to_fleet_run(
+        row: sqlite3.Row,
+        *,
+        duplicate: bool = False,
+    ) -> StoredFleetRun:
+        plan = FleetPlan.model_validate_json(row["plan_json"])
+        if duplicate:
+            plan = plan.model_copy(update={"duplicate": True})
+        return StoredFleetRun(
+            plan=plan,
+            received_at=datetime.fromisoformat(row["received_at"]),
             duplicate=duplicate,
         )
 
@@ -329,6 +396,108 @@ class Database:
             telemetry=telemetry,
             result=result,
         )
+
+    def save_fleet_run(
+        self,
+        snapshot: FleetSnapshot,
+        plan: FleetPlan,
+    ) -> StoredFleetRun:
+        input_json = canonical_fleet_snapshot_json(snapshot)
+        input_sha256 = fleet_input_sha256(snapshot)
+        if input_sha256 != plan.input_sha256:
+            raise ValueError("fleet plan input hash does not match snapshot")
+        if plan.snapshot_id != snapshot.snapshot_id or plan.site_id != snapshot.site_id:
+            raise ValueError("fleet plan scope does not match snapshot")
+
+        persisted_plan = plan.model_copy(update={"duplicate": False})
+        plan_json = persisted_plan.model_dump_json()
+        received_at = _utc_now()
+
+        with self._connection() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            existing = connection.execute(
+                """
+                SELECT plan_json, received_at, input_sha256
+                FROM fleet_runs
+                WHERE snapshot_id = ?
+                """,
+                (snapshot.snapshot_id,),
+            ).fetchone()
+            if existing:
+                connection.rollback()
+                if existing["input_sha256"] != input_sha256:
+                    raise FleetSnapshotConflictError(
+                        "snapshot_id already exists with different fleet content"
+                    )
+                return self._row_to_fleet_run(existing, duplicate=True)
+
+            connection.execute(
+                """
+                INSERT INTO fleet_runs (
+                    run_id, snapshot_id, site_id, source_mode, captured_at,
+                    received_at, planner_version, input_json, input_sha256, plan_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    persisted_plan.run_id,
+                    snapshot.snapshot_id,
+                    snapshot.site_id,
+                    snapshot.source_mode.value,
+                    snapshot.captured_at.isoformat(),
+                    received_at.isoformat(),
+                    persisted_plan.planner_version,
+                    input_json,
+                    input_sha256,
+                    plan_json,
+                ),
+            )
+            for vehicle in persisted_plan.vehicles:
+                connection.execute(
+                    """
+                    INSERT INTO fleet_vehicle_plans (
+                        run_id, vehicle_id, base_decision_json, allocation_status,
+                        rank, batch_index, queue_ahead, safe_point_id,
+                        action_permission, authorized_to_move, reason
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+                    """,
+                    (
+                        persisted_plan.run_id,
+                        vehicle.vehicle_id,
+                        vehicle.base_decision.model_dump_json(),
+                        vehicle.allocation_status.value,
+                        vehicle.rank,
+                        vehicle.batch_index,
+                        vehicle.queue_ahead,
+                        vehicle.safe_point_id,
+                        vehicle.action_permission.value,
+                        vehicle.reason,
+                    ),
+                )
+            connection.commit()
+
+        return StoredFleetRun(plan=persisted_plan, received_at=received_at)
+
+    def get_fleet_run(self, run_id: str) -> StoredFleetRun | None:
+        with self._connection() as connection:
+            row = connection.execute(
+                "SELECT plan_json, received_at FROM fleet_runs WHERE run_id = ?",
+                (run_id,),
+            ).fetchone()
+        return self._row_to_fleet_run(row) if row else None
+
+    def get_latest_fleet_run(self, site_id: str) -> StoredFleetRun | None:
+        with self._connection() as connection:
+            row = connection.execute(
+                """
+                SELECT plan_json, received_at
+                FROM fleet_runs
+                WHERE site_id = ?
+                ORDER BY received_at DESC, rowid DESC
+                LIMIT 1
+                """,
+                (site_id,),
+            ).fetchone()
+        return self._row_to_fleet_run(row) if row else None
 
     def get_event(self, event_id: str) -> StoredEvent | None:
         with self._connection() as connection:
