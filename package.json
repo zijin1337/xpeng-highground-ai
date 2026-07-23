@@ -1,6 +1,6 @@
 {
   "name": "xpeng-highground-ai",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "private": true,
   "type": "module",
   "description": "高地 AI：暴雨内涝场景下可运行的车辆安全位移决策、遥测与证据服务。",

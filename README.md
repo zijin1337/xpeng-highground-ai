@@ -1,21 +1,26 @@
 # 高地 AI · XPENG P5 暴雨风险控制台
 
-面向地下车库暴雨内涝的可运行安全决策原型：场端接收遥测、计算 Go / No-Go、保存证据与授权记录；P5 车端提供只读状态和座舱提醒。
+面向地下车库暴雨内涝的可运行安全决策原型：默认首页可回放六车 Fleet Shadow 演练，场端 API 可接收遥测、计算 Go / No-Go 并保存 SQLite 证据；P5 车端提供只读状态和座舱提醒。
 
 ![高地 AI 暴雨风险控制台](./assets/highground-demo.png)
 
-> 重要边界：后端、数据库、API、授权和命令留痕均可真实运行；默认车辆适配器为 `record-only`，不会向任何真实车辆发送控制指令。接入实车必须取得制造商官方 SDK/API、车辆授权、封闭场地许可，并完成独立安全壳和功能安全验证。本仓库不伪造小鹏车辆控制接口。
+> 重要边界：后端、数据库、API、授权和命令留痕均可在本地运行；默认车辆适配器为 `record-only`，不会向任何真实车辆发送控制指令。Fleet Shadow 请求不接受车主授权字段，也不进入命令或执行器链路。接入实车必须取得制造商官方 SDK/API、车辆授权、封闭场地许可，并完成独立安全壳和功能安全验证。本仓库不伪造小鹏车辆控制接口，也未验证真实 P5、停车场、传感器或训练模型。
 
 ## 评审证据入口
 
+- [Fleet Shadow 六车评审流程](./docs/DEMO.md#fleet-shadow-六车评审流程)：共享六阶段暴雨场景、确定性排队/容量拒绝、浏览器模拟与 FastAPI/SQLite 证据分层，以及可复现的 run ID 和双 SHA-256。
 - [系统架构图](#系统结构)：场端、浏览器、FastAPI/SQLite 证据链与 P5 只读端的 Mermaid 数据流，并明确画出当前不存在的车辆执行链路。
 - [两分钟暴雨全流程 Demo](./docs/DEMO.md)：固定 120 秒时间线、一键脚本、逐步断言、带事件链 ID 与 SHA-256 的脱敏 HTTP 运行记录；[v1.2.0 Release](https://github.com/zijin1337/xpeng-highground-ai/releases/tag/v1.2.0) 提供 MP4、manifest 和 evidence 下载。
-- [可复现 Benchmark](./docs/BENCHMARK.md)：9 个确定性场景覆盖全部 7 个决策码，并报告限定在本机 TestClient + 临时 SQLite 的 p50/p95。
+- [可复现 Benchmark](./docs/BENCHMARK.md)：9 个单车场景覆盖全部 7 个决策码，六车场景覆盖全部 6 个阶段，并报告限定在本机 TestClient + 临时 SQLite 的 p50/p95。
 - [现有方案与小鹏能力对比](./docs/competition-comparison.md)：地磁、人工通知、传统闸门、泊车能力、涉水边界及官方资料来源。
 - [传感器与边缘网关成本模型](./docs/cost-model.md)：内部预算假设下，单站 3 年 TCO 为 `¥77,200`、10 站为 `¥924,000`；逐项 BOM、算式、未计价项和正式 RFQ 条件均可复核。
 
 ## 现在真正可运行的部分
 
+- 默认 Fleet Shadow 仪表盘回放 6 辆车、6 个不可变阶段，展示风险、排序、批次、高位点、容量不足和窗口关闭；筛选只改变呈现，不改变规划结果。
+- 浏览器 Fleet Planner 与 Python Fleet Planner 共享同一 JSON 场景及确定性规则，并由跨语言投影测试逐阶段校验一致。
+- `POST /api/v1/fleet/shadow-runs` 原子保存 FleetSnapshot、逐车 FleetPlan、输入 SHA-256 和计划 SHA-256；同一快照重试可幂等读取，内容冲突返回 `409`。
+- Fleet Shadow 的所有 `authorized_to_move` 均为 `false`；`SCHEDULED_SHADOW` 只表示影子排程，不表示车辆获准移动。
 - `POST /api/v1/telemetry` 接收 HTTP 传感器与车辆状态遥测。
 - Pydantic 在入口校验范围、类型、时区和标识符，非法输入返回 `422`。
 - SQLite 使用 WAL、外键和事务保存原始输入、SHA-256、决策、授权和命令记录。
@@ -42,15 +47,22 @@ flowchart TB
     end
 
     subgraph WEB["浏览器控制台"]
-        LOCAL["GitHub Pages / 本地模式"] --> JS["浏览器解释型决策<br/>不写 SQLite、不签发授权"]
+        FLEETUI["默认 Fleet Shadow 仪表盘"] --> JSFLEET["浏览器 Fleet Planner<br/>SIMULATED、不写 SQLite"]
+        LOCAL["单车 GitHub Pages / 本地模式"] --> JS["浏览器解释型决策<br/>不写 SQLite、不签发授权"]
         APIUI["API 连接模式"]
         DIGITAL["数字路线演示<br/>仅回放 RECORDED_NOT_SENT"]
     end
 
     subgraph BACKEND["FastAPI 决策与证据服务"]
+        FAPI["POST /fleet/shadow-runs<br/>FleetSnapshot"] --> FPLANNER["确定性 Fleet Planner<br/>排序、批次、容量、安全拒绝"]
+        FPLANNER -->|"逐车复用"| ENGINE["现有 evaluate_decision"]
+        ENGINE -->|"Fleet 上下文"| FPLAN["FleetPlan<br/>全部 authorized_to_move=false"]
+        FPLAN --> FDBWRITE["输入/计划 SHA-256 + 原子写入"]
+        FLEETREAD["GET /fleet/shadow-runs/{run_id}<br/>GET /fleet/latest"]
+        FBOUNDARY["Fleet 安全边界<br/>无车主授权、无 command/actuator 调用"]
         TAPI["POST /telemetry"] --> VALIDATE["Pydantic 校验与幂等检查"]
-        VALIDATE --> ENGINE["确定性安全决策引擎"]
-        ENGINE --> EVIDENCE["遥测 + SHA-256 + 决策事务"]
+        VALIDATE --> ENGINE
+        ENGINE -->|"单车上下文"| EVIDENCE["遥测 + SHA-256 + 决策事务"]
         AUTH["POST /authorizations"] --> FRESH["最新事件、新鲜度、MIGRATE_NOW 校验"]
         CMD["POST /commands/migrate"] --> RECHECK["执行前重新计算安全条件"]
         RECHECK --> RO["RecordOnlyActuator"]
@@ -59,6 +71,8 @@ flowchart TB
         LATEST["GET /decisions/latest"]
         DB[("SQLite 证据库")]
         EVIDENCE --> DB
+        FDBWRITE --> DB
+        DB --> FLEETREAD
         FRESH --> DB
         ATOMIC --> DB
         DB --> LATEST
@@ -71,13 +85,36 @@ flowchart TB
     end
 
     GW -->|"HTTPS + X-API-Key"| TAPI
+    APIUI -->|"FleetSnapshot"| FAPI
+    FLEETREAD -->|"run ID + 双 SHA-256"| FLEETUI
+    FPLAN -.-> FBOUNDARY
     APIUI -->|"遥测"| TAPI
     APIUI -->|"事件级授权"| AUTH
     APIUI -->|"留痕命令"| CMD
     NOSEND --> DIGITAL
 ```
 
-图中没有从 P5/XUI 指向 `/telemetry` 的连线，也没有从 `RecordOnlyActuator` 指向车辆执行器的连线。这两条缺失是当前实现的明确边界，不是省略。
+图中没有从 P5/XUI 指向 `/telemetry` 的连线，也没有从 `RecordOnlyActuator` 指向车辆执行器的连线。Fleet Planner 只写 FleetPlan/SQLite，并由 `Fleet 安全边界` 明确终止，不连接授权、命令或执行器。这些缺失是当前实现的明确边界，不是省略。
+
+## Fleet Shadow 六车证据
+
+从仓库根目录运行六个阶段的 API/SQLite 证据生成器：
+
+```powershell
+.\.venv\Scripts\python.exe demo\run_fleet_scenario.py --output demo\artifacts\latest-fleet-evidence.json
+```
+
+运行器会刷新时间戳，通过 FastAPI 提交全部 6 个 FleetSnapshot，逐阶段比对期望投影，再从 SQLite 读取每个 run ID、输入 SHA-256 和计划 SHA-256。最终还会断言 `fleet_runs=6`、`fleet_vehicle_plans=36`、`authorizations=0`、`commands=0`，并把 `vehicle_command_transmitted` 固定为 `false`。输出不包含 API Key 或授权令牌。
+
+默认网页在两种证据状态之间明确区分：
+
+| 页面状态 | 标签和证据 | 含义 |
+|---|---|---|
+| 未连接 API | `SIMULATED · 浏览器规划 · 不写 SQLite`；run ID/哈希显示破折号 | JavaScript 本地规划，只用于可解释回放 |
+| API 已连接并提交 | `SQLite API 证据`；显示真实 `fleet_` run ID 与两项 SHA-256 | 本机 FastAPI/SQLite 持久化结果 |
+| API 断开或阶段已变化 | `SQLite 证据已过期 · 待提交新快照` | 保留上一份服务端结果，但不与当前浏览器计划混合 |
+
+六车数据来自仓库内置的模拟 JSON，并非真实 P5、真实停车场或现场传感器采集，也不使用训练模型。完整评审路径见 [Demo 文档](./docs/DEMO.md#fleet-shadow-六车评审流程)。
 
 ## 方式一：Docker 启动
 
@@ -190,6 +227,9 @@ python backend/edge_client.py \
 | `GET` | `/api/v1/policy` | 查看服务端安全策略 | 否 |
 | `GET` | `/api/v1/session` | 验证 API Key 与运行模式 | 是 |
 | `POST` | `/api/v1/telemetry` | 写入遥测并生成决策 | 是 |
+| `POST` | `/api/v1/fleet/shadow-runs` | 写入六车快照并生成影子计划 | 是 |
+| `GET` | `/api/v1/fleet/shadow-runs/{run_id}` | 按 run ID 读取不可变 FleetPlan 证据 | 是 |
+| `GET` | `/api/v1/fleet/latest` | 按 `site_id` 读取最新 FleetPlan | 是 |
 | `GET` | `/api/v1/decisions/latest` | 查询车辆最新决策 | 是 |
 | `GET` | `/api/v1/events` | 查询车辆事件历史 | 是 |
 | `GET` | `/api/v1/events/{event_id}` | 获取完整遥测与证据链 | 是 |
@@ -203,6 +243,8 @@ X-API-Key: replace-with-a-long-random-value
 ```
 
 完整字段、示例和可交互请求见 `/docs`。
+
+Fleet API 状态语义：新建快照返回 `201`；内容相同的 `snapshot_id` 重试返回 `200`；同 ID 不同内容返回 `409`；不存在的 run ID 或场站最新结果返回 `404`；最新结果超过新鲜度窗口返回 `410`；字段、时区、范围或采集时间无效返回 `422`。认证失败统一返回 `401`。
 
 ## 决策模型
 
@@ -244,9 +286,12 @@ T_last = T_threshold - T_route - T_queue - T_buffer
 - 已被新遥测取代的事件不能授权或记录命令；
 - 授权令牌不能重复使用，命令写库失败不会提前消费令牌；
 - SQLite 请求连接会在操作后显式关闭；
-- SQLite 事件历史持久化。
+- SQLite 事件历史持久化；
 - 两分钟固定 Demo 的完整 HTTP、授权、`RECORDED_NOT_SENT` 和令牌脱敏流程；
-- 9 场景 Benchmark 矩阵对全部决策码的合同覆盖与百分位报告结构。
+- 9 场景 Benchmark 矩阵对全部决策码的合同覆盖与百分位报告结构；
+- 六车六阶段 Python/JavaScript 投影一致性、SQLite 幂等/冲突/回滚、Fleet API 新鲜度与认证合同；
+- Fleet Shadow 证据生成器的 6 个 run、36 个逐车计划、零授权/零命令断言；
+- Fleet Benchmark 六阶段正确性与第 4 阶段本地 API 延迟报告结构。
 
 运行全部测试：
 
@@ -254,6 +299,7 @@ T_last = T_threshold - T_route - T_queue - T_buffer
 npm test
 python -m pytest backend/tests -q
 python -m benchmarks.run_benchmark --iterations 50 --warmups 3
+python demo/run_fleet_scenario.py --output demo/artifacts/latest-fleet-evidence.json
 ```
 
 GitHub Actions 会同时运行 JavaScript 决策测试和 Python API/数据库测试。
@@ -266,7 +312,9 @@ xpeng-highground-ai/
 │  ├─ app/
 │  │  ├─ main.py               # FastAPI、认证、API 和静态页面
 │  │  ├─ decision_engine.py    # 服务端确定性安全引擎
-│  │  ├─ database.py           # SQLite 事务、幂等、证据与授权
+│  │  ├─ fleet_models.py       # FleetSnapshot / FleetPlan 契约
+│  │  ├─ fleet_planner.py      # 六车排序、容量、批次与安全拒绝
+│  │  ├─ database.py           # 单车/Fleet SQLite 事务、幂等与证据
 │  │  ├─ actuator.py           # 默认不发送车辆指令的安全适配层
 │  │  ├─ models.py             # Pydantic 输入输出契约
 │  │  └─ config.py             # 服务端策略与环境配置
@@ -275,8 +323,15 @@ xpeng-highground-ai/
 │  └─ tests/                   # API、数据库与引擎测试
 ├─ src/
 │  ├─ app.js                   # UI、API 连接和本地降级演示
-│  └─ decision-engine.js       # 浏览器内解释型引擎
-├─ demo/                       # 固定两分钟场景、一键脚本与 HTTP 断言运行器
+│  ├─ decision-engine.js       # 浏览器内解释型引擎
+│  ├─ fleet-planner.js         # 与 Python 对齐的确定性 Fleet Planner
+│  ├─ fleet-scenario.js        # 共享六阶段 JSON 加载与校验
+│  ├─ fleet-view-state.js      # API 证据、新鲜度与请求竞态状态
+│  └─ fleet-view.js            # Fleet 仪表盘回放、筛选和 API 协调
+├─ demo/
+│  ├─ scenarios/fleet-rainstorm-v1.json  # 六车六阶段共享场景
+│  ├─ run_fleet_scenario.py              # FastAPI/SQLite 证据运行器
+│  └─ ...                                # 既有两分钟单车 Demo
 ├─ benchmarks/                 # 确定性场景矩阵、本地延迟工具与参考报告
 ├─ docs/                       # Demo、Benchmark、竞品对比与成本模型
 ├─ p5-headunit/                # 面向 P5 XUI 的 Android 只读监控与座舱提醒工程
@@ -288,7 +343,7 @@ xpeng-highground-ai/
 
 ## GitHub Pages 与可运行后端的区别
 
-GitHub Pages 地址只能运行静态界面和浏览器演示，因为 Pages 不能运行 Python 或 SQLite。要使用后端遥测 API、数据库、授权和命令接口，必须用 Docker/本地 Python 启动本仓库，或把容器部署到支持后端服务的平台。
+GitHub Pages 地址只能运行静态界面和浏览器演示，因为 Pages 不能运行 Python 或 SQLite。Fleet 页面在这种状态下只显示 `SIMULATED · 浏览器规划 · 不写 SQLite`，不会伪造 run ID 或 SHA-256。要使用 Fleet/单车后端 API、数据库、授权和命令接口，必须用 Docker/本地 Python 启动本仓库，或把容器部署到支持后端服务的平台。
 
 ## 小鹏 P5 车端
 

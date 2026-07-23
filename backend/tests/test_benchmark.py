@@ -32,3 +32,19 @@ def test_benchmark_matrix_covers_decisions_and_produces_latency_report():
         assert summary["count"] == 2
         assert summary["min_ms"] <= summary["p50_ms"] <= summary["p95_ms"]
         assert summary["p95_ms"] <= summary["max_ms"]
+
+    fleet = report["fleet_shadow"]
+    assert fleet["correctness"] == {
+        "passed": True,
+        "stage_count": 6,
+        "vehicle_count_per_stage": 6,
+        "vehicle_command_transmitted": False,
+    }
+    fleet_latency = fleet["latency"]["fleet_shadow_run"]
+    assert fleet_latency["count"] == 2
+    assert (
+        fleet_latency["min_ms"]
+        <= fleet_latency["p50_ms"]
+        <= fleet_latency["p95_ms"]
+        <= fleet_latency["max_ms"]
+    )

@@ -21,6 +21,12 @@ from backend.app.main import create_app
 
 
 DEFAULT_MATRIX_PATH = Path(__file__).with_name("scenarios.json")
+DEFAULT_FLEET_SCENARIO_PATH = (
+    Path(__file__).resolve().parents[1]
+    / "demo"
+    / "scenarios"
+    / "fleet-rainstorm-v1.json"
+)
 API_KEY = "benchmark-local-api-key"
 HEADERS = {"X-API-Key": API_KEY}
 
@@ -50,6 +56,20 @@ def load_matrix(path: Path = DEFAULT_MATRIX_PATH) -> dict[str, Any]:
     if len(scenario_ids) != len(set(scenario_ids)):
         raise BenchmarkAssertionError("Benchmark scenario ids must be unique")
     return matrix
+
+
+def load_fleet_scenario(
+    path: Path = DEFAULT_FLEET_SCENARIO_PATH,
+) -> dict[str, Any]:
+    scenario = json.loads(path.read_text(encoding="utf-8"))
+    _require_equal(scenario.get("schema_version"), 1, "fleet scenario schema")
+    stages = scenario.get("stages")
+    if not isinstance(stages, list) or len(stages) != 6:
+        raise BenchmarkAssertionError("Fleet benchmark must contain six stages")
+    stage_ids = [stage.get("stage_id") for stage in stages]
+    if len(stage_ids) != len(set(stage_ids)):
+        raise BenchmarkAssertionError("Fleet benchmark stage ids must be unique")
+    return scenario
 
 
 def _payload(
@@ -94,6 +114,77 @@ def _check_decision_response(
     )
     _require_equal(body["duplicate"], False, f"{scenario_id} duplicate flag")
     return body
+
+
+def _fresh_fleet_snapshot(
+    stage: dict[str, Any],
+    phase: str,
+    iteration: int,
+) -> dict[str, Any]:
+    snapshot = deepcopy(stage["snapshot"])
+    suffix = f"{phase}-{iteration:05d}"
+    timestamp = datetime.now(timezone.utc).isoformat()
+    snapshot["snapshot_id"] = f"{snapshot['snapshot_id']}-{suffix}"
+    snapshot["captured_at"] = timestamp
+    snapshot["site"]["observed_at"] = timestamp
+    for vehicle in snapshot["vehicles"]:
+        telemetry = vehicle["telemetry"]
+        telemetry["message_id"] = f"{telemetry['message_id']}-{suffix}"
+        telemetry["captured_at"] = timestamp
+    return snapshot
+
+
+def _project_fleet_plan(plan: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "summary": plan["summary"],
+        "vehicles": [
+            {
+                "vehicle_id": vehicle["vehicle_id"],
+                "decision": vehicle["base_decision"]["decision"],
+                "allocation_status": vehicle["allocation_status"],
+                "rank": vehicle["rank"],
+                "batch_index": vehicle["batch_index"],
+                "queue_ahead": vehicle["queue_ahead"],
+                "safe_point_id": vehicle["safe_point_id"],
+                "action_permission": vehicle["action_permission"],
+                "authorized_to_move": vehicle["authorized_to_move"],
+            }
+            for vehicle in plan["vehicles"]
+        ],
+    }
+
+
+def _exercise_fleet_stage(
+    client: TestClient,
+    stage: dict[str, Any],
+    phase: str,
+    iteration: int,
+) -> float:
+    snapshot = _fresh_fleet_snapshot(stage, phase, iteration)
+    started = perf_counter_ns()
+    response = client.post(
+        "/api/v1/fleet/shadow-runs",
+        json=snapshot,
+        headers=HEADERS,
+    )
+    elapsed_ms = _elapsed_ms(started)
+    _require_equal(
+        response.status_code,
+        201,
+        f"fleet {stage['stage_id']} status",
+    )
+    plan = response.json()
+    _require_equal(
+        _project_fleet_plan(plan),
+        stage["expect"],
+        f"fleet {stage['stage_id']} projection",
+    )
+    _require_equal(plan["duplicate"], False, f"fleet {stage['stage_id']} duplicate")
+    if any(vehicle["authorized_to_move"] for vehicle in plan["vehicles"]):
+        raise BenchmarkAssertionError(
+            f"fleet {stage['stage_id']} unexpectedly authorized vehicle movement"
+        )
+    return elapsed_ms
 
 
 def _elapsed_ms(start_ns: int) -> float:
@@ -206,11 +297,14 @@ def run_benchmark(
 
     matrix = load_matrix(matrix_path)
     scenarios = matrix["scenarios"]
+    fleet_scenario = load_fleet_scenario()
+    fleet_stages = fleet_scenario["stages"]
     latency_samples: dict[str, list[float]] = {
         "telemetry_ingest": [],
         "latest_decision": [],
         "authorization": [],
         "record_only_command": [],
+        "fleet_shadow_run": [],
     }
     ingest_by_scenario: dict[str, list[float]] = {
         scenario["id"]: [] for scenario in scenarios
@@ -249,6 +343,14 @@ def run_benchmark(
                     }
                 )
 
+            for index, stage in enumerate(fleet_stages):
+                _exercise_fleet_stage(
+                    client,
+                    stage,
+                    "correctness",
+                    index,
+                )
+
             for iteration in range(warmups):
                 for scenario in scenarios:
                     _exercise_scenario(
@@ -259,6 +361,12 @@ def run_benchmark(
                         iteration,
                         record_timings=False,
                     )
+                _exercise_fleet_stage(
+                    client,
+                    fleet_stages[3],
+                    "warmup",
+                    iteration,
+                )
 
             for iteration in range(iterations):
                 for scenario in scenarios:
@@ -275,6 +383,14 @@ def run_benchmark(
                     ingest_by_scenario[scenario["id"]].append(
                         timings["telemetry_ingest"]
                     )
+                latency_samples["fleet_shadow_run"].append(
+                    _exercise_fleet_stage(
+                        client,
+                        fleet_stages[3],
+                        "measure",
+                        iteration,
+                    )
+                )
 
     return {
         "schema_version": 1,
@@ -316,6 +432,19 @@ def run_benchmark(
             "latest_decision": summarize(latency_samples["latest_decision"]),
             "migration_authorization": summarize(latency_samples["authorization"]),
             "record_only_command": summarize(latency_samples["record_only_command"]),
+        },
+        "fleet_shadow": {
+            "correctness": {
+                "passed": True,
+                "stage_count": len(fleet_stages),
+                "vehicle_count_per_stage": len(fleet_stages[0]["snapshot"]["vehicles"]),
+                "vehicle_command_transmitted": False,
+            },
+            "latency": {
+                "fleet_shadow_run": summarize(
+                    latency_samples["fleet_shadow_run"]
+                ),
+            },
         },
     }
 
