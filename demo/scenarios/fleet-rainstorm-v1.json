@@ -1,0 +1,238 @@
+{
+  "schema_version": 1,
+  "planner_version": "fleet-shadow-v1",
+  "default_stage_index": 3,
+  "stages": [
+    {
+      "stage_id": "01-daily-watch",
+      "label": "日常守望",
+      "snapshot": {
+        "snapshot_id": "fleet-stage-01",
+        "site_id": "garage-demo-b1",
+        "captured_at": "2026-07-23T08:00:00+00:00",
+        "source_mode": "SIMULATED",
+        "site": {
+          "observed_at": "2026-07-23T08:00:00+00:00",
+          "gateway_online": true,
+          "batch_size": 2,
+          "batch_interval_min": 0.7,
+          "safe_points": [
+            {"safe_point_id": "high-a", "label": "高位 A", "priority": 1, "capacity": 1, "available": true},
+            {"safe_point_id": "high-b", "label": "高位 B", "priority": 2, "capacity": 1, "available": true}
+          ]
+        },
+        "vehicles": [
+          {
+            "telemetry": {
+              "message_id": "msg-01-p5-01", "site_id": "garage-demo-b1", "vehicle_id": "p5-01", "source_id": "scenario-fleet-rainstorm-v1", "captured_at": "2026-07-23T08:00:00+00:00",
+              "environment": {"rainfall_mm_h": 35, "water_level_cm": 4, "secondary_water_level_cm": 4, "rise_rate_cm_min": 0.2, "sensor_confidence": 0.94},
+              "vehicle": {"occupants_clear": true, "charging_disconnected": true, "vehicle_healthy": true, "positioning_online": true, "network_online": true, "emergency_operator_online": true, "water_contact_triggered": false, "motion_state": "PARKED"},
+              "site": {"route_dry": true, "route_blocked": false}
+            },
+            "danger_water_level_cm": null, "route_distance_m": null
+          },
+          {
+            "telemetry": {
+              "message_id": "msg-01-p5-02", "site_id": "garage-demo-b1", "vehicle_id": "p5-02", "source_id": "scenario-fleet-rainstorm-v1", "captured_at": "2026-07-23T08:00:00+00:00",
+              "environment": {"rainfall_mm_h": 35, "water_level_cm": 4, "secondary_water_level_cm": 4, "rise_rate_cm_min": 0.2, "sensor_confidence": 0.94},
+              "vehicle": {"occupants_clear": true, "charging_disconnected": true, "vehicle_healthy": true, "positioning_online": true, "network_online": true, "emergency_operator_online": true, "water_contact_triggered": false, "motion_state": "PARKED"},
+              "site": {"route_dry": true, "route_blocked": false}
+            },
+            "danger_water_level_cm": null, "route_distance_m": null
+          },
+          {
+            "telemetry": {
+              "message_id": "msg-01-p5-03", "site_id": "garage-demo-b1", "vehicle_id": "p5-03", "source_id": "scenario-fleet-rainstorm-v1", "captured_at": "2026-07-23T08:00:00+00:00",
+              "environment": {"rainfall_mm_h": 35, "water_level_cm": 4, "secondary_water_level_cm": 4, "rise_rate_cm_min": 0.2, "sensor_confidence": 0.94},
+              "vehicle": {"occupants_clear": true, "charging_disconnected": true, "vehicle_healthy": true, "positioning_online": true, "network_online": true, "emergency_operator_online": true, "water_contact_triggered": false, "motion_state": "PARKED"},
+              "site": {"route_dry": true, "route_blocked": false}
+            },
+            "danger_water_level_cm": null, "route_distance_m": null
+          },
+          {
+            "telemetry": {
+              "message_id": "msg-01-p5-04", "site_id": "garage-demo-b1", "vehicle_id": "p5-04", "source_id": "scenario-fleet-rainstorm-v1", "captured_at": "2026-07-23T08:00:00+00:00",
+              "environment": {"rainfall_mm_h": 35, "water_level_cm": 4, "secondary_water_level_cm": 4, "rise_rate_cm_min": 0.2, "sensor_confidence": 0.94},
+              "vehicle": {"occupants_clear": true, "charging_disconnected": true, "vehicle_healthy": true, "positioning_online": true, "network_online": true, "emergency_operator_online": true, "water_contact_triggered": false, "motion_state": "PARKED"},
+              "site": {"route_dry": true, "route_blocked": false}
+            },
+            "danger_water_level_cm": null, "route_distance_m": null
+          },
+          {
+            "telemetry": {
+              "message_id": "msg-01-p5-05", "site_id": "garage-demo-b1", "vehicle_id": "p5-05", "source_id": "scenario-fleet-rainstorm-v1", "captured_at": "2026-07-23T08:00:00+00:00",
+              "environment": {"rainfall_mm_h": 35, "water_level_cm": 4, "secondary_water_level_cm": 4, "rise_rate_cm_min": 0.2, "sensor_confidence": 0.94},
+              "vehicle": {"occupants_clear": true, "charging_disconnected": true, "vehicle_healthy": true, "positioning_online": true, "network_online": true, "emergency_operator_online": true, "water_contact_triggered": false, "motion_state": "PARKED"},
+              "site": {"route_dry": true, "route_blocked": false}
+            },
+            "danger_water_level_cm": null, "route_distance_m": null
+          },
+          {
+            "telemetry": {
+              "message_id": "msg-01-p5-06", "site_id": "garage-demo-b1", "vehicle_id": "p5-06", "source_id": "scenario-fleet-rainstorm-v1", "captured_at": "2026-07-23T08:00:00+00:00",
+              "environment": {"rainfall_mm_h": 35, "water_level_cm": 4, "secondary_water_level_cm": 4, "rise_rate_cm_min": 0.2, "sensor_confidence": 0.94},
+              "vehicle": {"occupants_clear": true, "charging_disconnected": true, "vehicle_healthy": true, "positioning_online": true, "network_online": true, "emergency_operator_online": true, "water_contact_triggered": false, "motion_state": "PARKED"},
+              "site": {"route_dry": true, "route_blocked": false}
+            },
+            "danger_water_level_cm": null, "route_distance_m": null
+          }
+        ]
+      },
+      "expect": {
+        "summary": {"vehicle_count": 6, "scheduled_count": 0, "verify_count": 0, "denied_count": 0, "remaining_capacity": 2},
+        "vehicles": [
+          {"vehicle_id": "p5-01", "decision": "STAY", "allocation_status": "NOT_REQUIRED", "rank": null, "batch_index": null, "queue_ahead": null, "safe_point_id": null, "action_permission": "NONE", "authorized_to_move": false},
+          {"vehicle_id": "p5-02", "decision": "STAY", "allocation_status": "NOT_REQUIRED", "rank": null, "batch_index": null, "queue_ahead": null, "safe_point_id": null, "action_permission": "NONE", "authorized_to_move": false},
+          {"vehicle_id": "p5-03", "decision": "STAY", "allocation_status": "NOT_REQUIRED", "rank": null, "batch_index": null, "queue_ahead": null, "safe_point_id": null, "action_permission": "NONE", "authorized_to_move": false},
+          {"vehicle_id": "p5-04", "decision": "STAY", "allocation_status": "NOT_REQUIRED", "rank": null, "batch_index": null, "queue_ahead": null, "safe_point_id": null, "action_permission": "NONE", "authorized_to_move": false},
+          {"vehicle_id": "p5-05", "decision": "STAY", "allocation_status": "NOT_REQUIRED", "rank": null, "batch_index": null, "queue_ahead": null, "safe_point_id": null, "action_permission": "NONE", "authorized_to_move": false},
+          {"vehicle_id": "p5-06", "decision": "STAY", "allocation_status": "NOT_REQUIRED", "rank": null, "batch_index": null, "queue_ahead": null, "safe_point_id": null, "action_permission": "NONE", "authorized_to_move": false}
+        ]
+      }
+    },
+    {
+      "stage_id": "02-heavy-rain",
+      "label": "强降雨",
+      "snapshot": {
+        "snapshot_id": "fleet-stage-02",
+        "site_id": "garage-demo-b1",
+        "captured_at": "2026-07-23T08:01:00+00:00",
+        "source_mode": "SIMULATED",
+        "site": {
+          "observed_at": "2026-07-23T08:01:00+00:00", "gateway_online": true, "batch_size": 2, "batch_interval_min": 0.7,
+          "safe_points": [
+            {"safe_point_id": "high-a", "label": "高位 A", "priority": 1, "capacity": 1, "available": true},
+            {"safe_point_id": "high-b", "label": "高位 B", "priority": 2, "capacity": 1, "available": true}
+          ]
+        },
+        "vehicles": [
+          {"telemetry": {"message_id": "msg-02-p5-01", "site_id": "garage-demo-b1", "vehicle_id": "p5-01", "source_id": "scenario-fleet-rainstorm-v1", "captured_at": "2026-07-23T08:01:00+00:00", "environment": {"rainfall_mm_h": 65, "water_level_cm": 6, "secondary_water_level_cm": 6.2, "rise_rate_cm_min": 0.5, "sensor_confidence": 0.93}, "vehicle": {"occupants_clear": true, "charging_disconnected": true, "vehicle_healthy": true, "positioning_online": true, "network_online": true, "emergency_operator_online": true, "water_contact_triggered": false, "motion_state": "PARKED"}, "site": {"route_dry": true, "route_blocked": false}}, "danger_water_level_cm": null, "route_distance_m": null},
+          {"telemetry": {"message_id": "msg-02-p5-02", "site_id": "garage-demo-b1", "vehicle_id": "p5-02", "source_id": "scenario-fleet-rainstorm-v1", "captured_at": "2026-07-23T08:01:00+00:00", "environment": {"rainfall_mm_h": 65, "water_level_cm": 6, "secondary_water_level_cm": 6.2, "rise_rate_cm_min": 0.5, "sensor_confidence": 0.93}, "vehicle": {"occupants_clear": true, "charging_disconnected": true, "vehicle_healthy": true, "positioning_online": true, "network_online": true, "emergency_operator_online": true, "water_contact_triggered": false, "motion_state": "PARKED"}, "site": {"route_dry": true, "route_blocked": false}}, "danger_water_level_cm": null, "route_distance_m": null},
+          {"telemetry": {"message_id": "msg-02-p5-03", "site_id": "garage-demo-b1", "vehicle_id": "p5-03", "source_id": "scenario-fleet-rainstorm-v1", "captured_at": "2026-07-23T08:01:00+00:00", "environment": {"rainfall_mm_h": 65, "water_level_cm": 6, "secondary_water_level_cm": 6.2, "rise_rate_cm_min": 0.5, "sensor_confidence": 0.93}, "vehicle": {"occupants_clear": true, "charging_disconnected": true, "vehicle_healthy": true, "positioning_online": true, "network_online": true, "emergency_operator_online": true, "water_contact_triggered": false, "motion_state": "PARKED"}, "site": {"route_dry": true, "route_blocked": false}}, "danger_water_level_cm": null, "route_distance_m": null},
+          {"telemetry": {"message_id": "msg-02-p5-04", "site_id": "garage-demo-b1", "vehicle_id": "p5-04", "source_id": "scenario-fleet-rainstorm-v1", "captured_at": "2026-07-23T08:01:00+00:00", "environment": {"rainfall_mm_h": 65, "water_level_cm": 6, "secondary_water_level_cm": 6.2, "rise_rate_cm_min": 0.5, "sensor_confidence": 0.93}, "vehicle": {"occupants_clear": true, "charging_disconnected": true, "vehicle_healthy": true, "positioning_online": true, "network_online": true, "emergency_operator_online": true, "water_contact_triggered": false, "motion_state": "PARKED"}, "site": {"route_dry": true, "route_blocked": false}}, "danger_water_level_cm": null, "route_distance_m": null},
+          {"telemetry": {"message_id": "msg-02-p5-05", "site_id": "garage-demo-b1", "vehicle_id": "p5-05", "source_id": "scenario-fleet-rainstorm-v1", "captured_at": "2026-07-23T08:01:00+00:00", "environment": {"rainfall_mm_h": 65, "water_level_cm": 6, "secondary_water_level_cm": 6.2, "rise_rate_cm_min": 0.5, "sensor_confidence": 0.93}, "vehicle": {"occupants_clear": true, "charging_disconnected": true, "vehicle_healthy": true, "positioning_online": true, "network_online": true, "emergency_operator_online": true, "water_contact_triggered": false, "motion_state": "PARKED"}, "site": {"route_dry": true, "route_blocked": false}}, "danger_water_level_cm": null, "route_distance_m": null},
+          {"telemetry": {"message_id": "msg-02-p5-06", "site_id": "garage-demo-b1", "vehicle_id": "p5-06", "source_id": "scenario-fleet-rainstorm-v1", "captured_at": "2026-07-23T08:01:00+00:00", "environment": {"rainfall_mm_h": 65, "water_level_cm": 6, "secondary_water_level_cm": 6.2, "rise_rate_cm_min": 0.5, "sensor_confidence": 0.93}, "vehicle": {"occupants_clear": true, "charging_disconnected": true, "vehicle_healthy": true, "positioning_online": true, "network_online": true, "emergency_operator_online": true, "water_contact_triggered": false, "motion_state": "PARKED"}, "site": {"route_dry": true, "route_blocked": false}}, "danger_water_level_cm": null, "route_distance_m": null}
+        ]
+      },
+      "expect": {
+        "summary": {"vehicle_count": 6, "scheduled_count": 0, "verify_count": 0, "denied_count": 0, "remaining_capacity": 2},
+        "vehicles": [
+          {"vehicle_id": "p5-01", "decision": "WATCH", "allocation_status": "NOT_REQUIRED", "rank": null, "batch_index": null, "queue_ahead": null, "safe_point_id": null, "action_permission": "NONE", "authorized_to_move": false},
+          {"vehicle_id": "p5-02", "decision": "WATCH", "allocation_status": "NOT_REQUIRED", "rank": null, "batch_index": null, "queue_ahead": null, "safe_point_id": null, "action_permission": "NONE", "authorized_to_move": false},
+          {"vehicle_id": "p5-03", "decision": "WATCH", "allocation_status": "NOT_REQUIRED", "rank": null, "batch_index": null, "queue_ahead": null, "safe_point_id": null, "action_permission": "NONE", "authorized_to_move": false},
+          {"vehicle_id": "p5-04", "decision": "WATCH", "allocation_status": "NOT_REQUIRED", "rank": null, "batch_index": null, "queue_ahead": null, "safe_point_id": null, "action_permission": "NONE", "authorized_to_move": false},
+          {"vehicle_id": "p5-05", "decision": "WATCH", "allocation_status": "NOT_REQUIRED", "rank": null, "batch_index": null, "queue_ahead": null, "safe_point_id": null, "action_permission": "NONE", "authorized_to_move": false},
+          {"vehicle_id": "p5-06", "decision": "WATCH", "allocation_status": "NOT_REQUIRED", "rank": null, "batch_index": null, "queue_ahead": null, "safe_point_id": null, "action_permission": "NONE", "authorized_to_move": false}
+        ]
+      }
+    },
+    {
+      "stage_id": "03-prepare-window",
+      "label": "窗口收窄",
+      "snapshot": {
+        "snapshot_id": "fleet-stage-03", "site_id": "garage-demo-b1", "captured_at": "2026-07-23T08:02:00+00:00", "source_mode": "SIMULATED",
+        "site": {"observed_at": "2026-07-23T08:02:00+00:00", "gateway_online": true, "batch_size": 2, "batch_interval_min": 0.7, "safe_points": [{"safe_point_id": "high-a", "label": "高位 A", "priority": 1, "capacity": 1, "available": true}, {"safe_point_id": "high-b", "label": "高位 B", "priority": 2, "capacity": 1, "available": true}]},
+        "vehicles": [
+          {"telemetry": {"message_id": "msg-03-p5-01", "site_id": "garage-demo-b1", "vehicle_id": "p5-01", "source_id": "scenario-fleet-rainstorm-v1", "captured_at": "2026-07-23T08:02:00+00:00", "environment": {"rainfall_mm_h": 88, "water_level_cm": 10, "secondary_water_level_cm": 10.2, "rise_rate_cm_min": 0.7, "sensor_confidence": 0.92}, "vehicle": {"occupants_clear": true, "charging_disconnected": true, "vehicle_healthy": true, "positioning_online": true, "network_online": true, "emergency_operator_online": true, "water_contact_triggered": false, "motion_state": "PARKED"}, "site": {"route_dry": true, "route_blocked": false}}, "danger_water_level_cm": null, "route_distance_m": null},
+          {"telemetry": {"message_id": "msg-03-p5-02", "site_id": "garage-demo-b1", "vehicle_id": "p5-02", "source_id": "scenario-fleet-rainstorm-v1", "captured_at": "2026-07-23T08:02:00+00:00", "environment": {"rainfall_mm_h": 88, "water_level_cm": 10, "secondary_water_level_cm": 10.2, "rise_rate_cm_min": 0.7, "sensor_confidence": 0.92}, "vehicle": {"occupants_clear": true, "charging_disconnected": true, "vehicle_healthy": true, "positioning_online": true, "network_online": true, "emergency_operator_online": true, "water_contact_triggered": false, "motion_state": "PARKED"}, "site": {"route_dry": true, "route_blocked": false}}, "danger_water_level_cm": null, "route_distance_m": null},
+          {"telemetry": {"message_id": "msg-03-p5-03", "site_id": "garage-demo-b1", "vehicle_id": "p5-03", "source_id": "scenario-fleet-rainstorm-v1", "captured_at": "2026-07-23T08:02:00+00:00", "environment": {"rainfall_mm_h": 65, "water_level_cm": 6, "secondary_water_level_cm": 6.2, "rise_rate_cm_min": 0.5, "sensor_confidence": 0.93}, "vehicle": {"occupants_clear": true, "charging_disconnected": true, "vehicle_healthy": true, "positioning_online": true, "network_online": true, "emergency_operator_online": true, "water_contact_triggered": false, "motion_state": "PARKED"}, "site": {"route_dry": true, "route_blocked": false}}, "danger_water_level_cm": null, "route_distance_m": null},
+          {"telemetry": {"message_id": "msg-03-p5-04", "site_id": "garage-demo-b1", "vehicle_id": "p5-04", "source_id": "scenario-fleet-rainstorm-v1", "captured_at": "2026-07-23T08:02:00+00:00", "environment": {"rainfall_mm_h": 65, "water_level_cm": 6, "secondary_water_level_cm": 6.2, "rise_rate_cm_min": 0.5, "sensor_confidence": 0.93}, "vehicle": {"occupants_clear": true, "charging_disconnected": true, "vehicle_healthy": true, "positioning_online": true, "network_online": true, "emergency_operator_online": true, "water_contact_triggered": false, "motion_state": "PARKED"}, "site": {"route_dry": true, "route_blocked": false}}, "danger_water_level_cm": null, "route_distance_m": null},
+          {"telemetry": {"message_id": "msg-03-p5-05", "site_id": "garage-demo-b1", "vehicle_id": "p5-05", "source_id": "scenario-fleet-rainstorm-v1", "captured_at": "2026-07-23T08:02:00+00:00", "environment": {"rainfall_mm_h": 65, "water_level_cm": 6, "secondary_water_level_cm": 6.2, "rise_rate_cm_min": 0.5, "sensor_confidence": 0.93}, "vehicle": {"occupants_clear": true, "charging_disconnected": true, "vehicle_healthy": true, "positioning_online": true, "network_online": true, "emergency_operator_online": true, "water_contact_triggered": false, "motion_state": "PARKED"}, "site": {"route_dry": true, "route_blocked": false}}, "danger_water_level_cm": null, "route_distance_m": null},
+          {"telemetry": {"message_id": "msg-03-p5-06", "site_id": "garage-demo-b1", "vehicle_id": "p5-06", "source_id": "scenario-fleet-rainstorm-v1", "captured_at": "2026-07-23T08:02:00+00:00", "environment": {"rainfall_mm_h": 65, "water_level_cm": 6, "secondary_water_level_cm": 6.2, "rise_rate_cm_min": 0.5, "sensor_confidence": 0.93}, "vehicle": {"occupants_clear": true, "charging_disconnected": true, "vehicle_healthy": true, "positioning_online": true, "network_online": true, "emergency_operator_online": true, "water_contact_triggered": false, "motion_state": "PARKED"}, "site": {"route_dry": true, "route_blocked": false}}, "danger_water_level_cm": null, "route_distance_m": null}
+        ]
+      },
+      "expect": {
+        "summary": {"vehicle_count": 6, "scheduled_count": 0, "verify_count": 0, "denied_count": 0, "remaining_capacity": 2},
+        "vehicles": [
+          {"vehicle_id": "p5-01", "decision": "PREPARE", "allocation_status": "PREPARE_ONLY", "rank": null, "batch_index": null, "queue_ahead": null, "safe_point_id": null, "action_permission": "NONE", "authorized_to_move": false},
+          {"vehicle_id": "p5-02", "decision": "PREPARE", "allocation_status": "PREPARE_ONLY", "rank": null, "batch_index": null, "queue_ahead": null, "safe_point_id": null, "action_permission": "NONE", "authorized_to_move": false},
+          {"vehicle_id": "p5-03", "decision": "WATCH", "allocation_status": "NOT_REQUIRED", "rank": null, "batch_index": null, "queue_ahead": null, "safe_point_id": null, "action_permission": "NONE", "authorized_to_move": false},
+          {"vehicle_id": "p5-04", "decision": "WATCH", "allocation_status": "NOT_REQUIRED", "rank": null, "batch_index": null, "queue_ahead": null, "safe_point_id": null, "action_permission": "NONE", "authorized_to_move": false},
+          {"vehicle_id": "p5-05", "decision": "WATCH", "allocation_status": "NOT_REQUIRED", "rank": null, "batch_index": null, "queue_ahead": null, "safe_point_id": null, "action_permission": "NONE", "authorized_to_move": false},
+          {"vehicle_id": "p5-06", "decision": "WATCH", "allocation_status": "NOT_REQUIRED", "rank": null, "batch_index": null, "queue_ahead": null, "safe_point_id": null, "action_permission": "NONE", "authorized_to_move": false}
+        ]
+      }
+    },
+    {
+      "stage_id": "04-rapid-rise",
+      "label": "快速上涨",
+      "snapshot": {
+        "snapshot_id": "fleet-stage-04", "site_id": "garage-demo-b1", "captured_at": "2026-07-23T08:03:00+00:00", "source_mode": "SIMULATED",
+        "site": {"observed_at": "2026-07-23T08:03:00+00:00", "gateway_online": true, "batch_size": 2, "batch_interval_min": 0.7, "safe_points": [{"safe_point_id": "high-a", "label": "高位 A", "priority": 1, "capacity": 1, "available": true}, {"safe_point_id": "high-b", "label": "高位 B", "priority": 2, "capacity": 1, "available": true}]},
+        "vehicles": [
+          {"telemetry": {"message_id": "msg-04-p5-01", "site_id": "garage-demo-b1", "vehicle_id": "p5-01", "source_id": "scenario-fleet-rainstorm-v1", "captured_at": "2026-07-23T08:03:00+00:00", "environment": {"rainfall_mm_h": 96, "water_level_cm": 14, "secondary_water_level_cm": 14, "rise_rate_cm_min": 1, "sensor_confidence": 0.91}, "vehicle": {"occupants_clear": true, "charging_disconnected": true, "vehicle_healthy": true, "positioning_online": true, "network_online": true, "emergency_operator_online": true, "water_contact_triggered": false, "motion_state": "PARKED"}, "site": {"route_dry": true, "route_blocked": false}}, "danger_water_level_cm": null, "route_distance_m": null},
+          {"telemetry": {"message_id": "msg-04-p5-02", "site_id": "garage-demo-b1", "vehicle_id": "p5-02", "source_id": "scenario-fleet-rainstorm-v1", "captured_at": "2026-07-23T08:03:00+00:00", "environment": {"rainfall_mm_h": 96, "water_level_cm": 14, "secondary_water_level_cm": 14, "rise_rate_cm_min": 1, "sensor_confidence": 0.91}, "vehicle": {"occupants_clear": true, "charging_disconnected": true, "vehicle_healthy": true, "positioning_online": true, "network_online": true, "emergency_operator_online": true, "water_contact_triggered": false, "motion_state": "PARKED"}, "site": {"route_dry": true, "route_blocked": false}}, "danger_water_level_cm": null, "route_distance_m": null},
+          {"telemetry": {"message_id": "msg-04-p5-03", "site_id": "garage-demo-b1", "vehicle_id": "p5-03", "source_id": "scenario-fleet-rainstorm-v1", "captured_at": "2026-07-23T08:03:00+00:00", "environment": {"rainfall_mm_h": 96, "water_level_cm": 14, "secondary_water_level_cm": 14, "rise_rate_cm_min": 1, "sensor_confidence": 0.55}, "vehicle": {"occupants_clear": true, "charging_disconnected": true, "vehicle_healthy": true, "positioning_online": true, "network_online": true, "emergency_operator_online": true, "water_contact_triggered": false, "motion_state": "PARKED"}, "site": {"route_dry": true, "route_blocked": false}}, "danger_water_level_cm": null, "route_distance_m": null},
+          {"telemetry": {"message_id": "msg-04-p5-04", "site_id": "garage-demo-b1", "vehicle_id": "p5-04", "source_id": "scenario-fleet-rainstorm-v1", "captured_at": "2026-07-23T08:03:00+00:00", "environment": {"rainfall_mm_h": 96, "water_level_cm": 14, "secondary_water_level_cm": 14, "rise_rate_cm_min": 1, "sensor_confidence": 0.91}, "vehicle": {"occupants_clear": true, "charging_disconnected": true, "vehicle_healthy": true, "positioning_online": true, "network_online": true, "emergency_operator_online": true, "water_contact_triggered": false, "motion_state": "PARKED"}, "site": {"route_dry": false, "route_blocked": false}}, "danger_water_level_cm": null, "route_distance_m": null},
+          {"telemetry": {"message_id": "msg-04-p5-05", "site_id": "garage-demo-b1", "vehicle_id": "p5-05", "source_id": "scenario-fleet-rainstorm-v1", "captured_at": "2026-07-23T08:03:00+00:00", "environment": {"rainfall_mm_h": 96, "water_level_cm": 14, "secondary_water_level_cm": 14, "rise_rate_cm_min": 1, "sensor_confidence": 0.91}, "vehicle": {"occupants_clear": true, "charging_disconnected": true, "vehicle_healthy": true, "positioning_online": true, "network_online": true, "emergency_operator_online": true, "water_contact_triggered": false, "motion_state": "PARKED"}, "site": {"route_dry": true, "route_blocked": false}}, "danger_water_level_cm": null, "route_distance_m": null},
+          {"telemetry": {"message_id": "msg-04-p5-06", "site_id": "garage-demo-b1", "vehicle_id": "p5-06", "source_id": "scenario-fleet-rainstorm-v1", "captured_at": "2026-07-23T08:03:00+00:00", "environment": {"rainfall_mm_h": 96, "water_level_cm": 14, "secondary_water_level_cm": 14, "rise_rate_cm_min": 1, "sensor_confidence": 0.91}, "vehicle": {"occupants_clear": true, "charging_disconnected": true, "vehicle_healthy": true, "positioning_online": true, "network_online": true, "emergency_operator_online": true, "water_contact_triggered": false, "motion_state": "PARKED"}, "site": {"route_dry": true, "route_blocked": false}}, "danger_water_level_cm": null, "route_distance_m": null}
+        ]
+      },
+      "expect": {
+        "summary": {"vehicle_count": 6, "scheduled_count": 2, "verify_count": 1, "denied_count": 3, "remaining_capacity": 0},
+        "vehicles": [
+          {"vehicle_id": "p5-01", "decision": "MIGRATE_NOW", "allocation_status": "SCHEDULED_SHADOW", "rank": 1, "batch_index": 1, "queue_ahead": 0, "safe_point_id": "high-a", "action_permission": "SHADOW_ONLY", "authorized_to_move": false},
+          {"vehicle_id": "p5-02", "decision": "MIGRATE_NOW", "allocation_status": "SCHEDULED_SHADOW", "rank": 2, "batch_index": 1, "queue_ahead": 1, "safe_point_id": "high-b", "action_permission": "SHADOW_ONLY", "authorized_to_move": false},
+          {"vehicle_id": "p5-05", "decision": "MIGRATE_NOW", "allocation_status": "NO_CAPACITY", "rank": 3, "batch_index": null, "queue_ahead": null, "safe_point_id": null, "action_permission": "DENIED", "authorized_to_move": false},
+          {"vehicle_id": "p5-06", "decision": "MIGRATE_NOW", "allocation_status": "NO_CAPACITY", "rank": 4, "batch_index": null, "queue_ahead": null, "safe_point_id": null, "action_permission": "DENIED", "authorized_to_move": false},
+          {"vehicle_id": "p5-03", "decision": "VERIFY_ONLY", "allocation_status": "VERIFY_ONLY", "rank": null, "batch_index": null, "queue_ahead": null, "safe_point_id": null, "action_permission": "NONE", "authorized_to_move": false},
+          {"vehicle_id": "p5-04", "decision": "NO_GO", "allocation_status": "DENIED", "rank": null, "batch_index": null, "queue_ahead": null, "safe_point_id": null, "action_permission": "DENIED", "authorized_to_move": false}
+        ]
+      }
+    },
+    {
+      "stage_id": "05-capacity-limited",
+      "label": "容量受限",
+      "snapshot": {
+        "snapshot_id": "fleet-stage-05", "site_id": "garage-demo-b1", "captured_at": "2026-07-23T08:04:00+00:00", "source_mode": "SIMULATED",
+        "site": {"observed_at": "2026-07-23T08:04:00+00:00", "gateway_online": true, "batch_size": 1, "batch_interval_min": 0.7, "safe_points": [{"safe_point_id": "high-a", "label": "高位 A", "priority": 1, "capacity": 1, "available": true}]},
+        "vehicles": [
+          {"telemetry": {"message_id": "msg-05-p5-01", "site_id": "garage-demo-b1", "vehicle_id": "p5-01", "source_id": "scenario-fleet-rainstorm-v1", "captured_at": "2026-07-23T08:04:00+00:00", "environment": {"rainfall_mm_h": 102, "water_level_cm": 14, "secondary_water_level_cm": 14, "rise_rate_cm_min": 1, "sensor_confidence": 0.91}, "vehicle": {"occupants_clear": true, "charging_disconnected": true, "vehicle_healthy": true, "positioning_online": true, "network_online": true, "emergency_operator_online": true, "water_contact_triggered": false, "motion_state": "PARKED"}, "site": {"route_dry": true, "route_blocked": false}}, "danger_water_level_cm": null, "route_distance_m": null},
+          {"telemetry": {"message_id": "msg-05-p5-02", "site_id": "garage-demo-b1", "vehicle_id": "p5-02", "source_id": "scenario-fleet-rainstorm-v1", "captured_at": "2026-07-23T08:04:00+00:00", "environment": {"rainfall_mm_h": 102, "water_level_cm": 14, "secondary_water_level_cm": 14, "rise_rate_cm_min": 1, "sensor_confidence": 0.91}, "vehicle": {"occupants_clear": true, "charging_disconnected": true, "vehicle_healthy": true, "positioning_online": true, "network_online": true, "emergency_operator_online": true, "water_contact_triggered": false, "motion_state": "PARKED"}, "site": {"route_dry": true, "route_blocked": false}}, "danger_water_level_cm": null, "route_distance_m": null},
+          {"telemetry": {"message_id": "msg-05-p5-03", "site_id": "garage-demo-b1", "vehicle_id": "p5-03", "source_id": "scenario-fleet-rainstorm-v1", "captured_at": "2026-07-23T08:04:00+00:00", "environment": {"rainfall_mm_h": 102, "water_level_cm": 14, "secondary_water_level_cm": 14, "rise_rate_cm_min": 1, "sensor_confidence": 0.55}, "vehicle": {"occupants_clear": true, "charging_disconnected": true, "vehicle_healthy": true, "positioning_online": true, "network_online": true, "emergency_operator_online": true, "water_contact_triggered": false, "motion_state": "PARKED"}, "site": {"route_dry": true, "route_blocked": false}}, "danger_water_level_cm": null, "route_distance_m": null},
+          {"telemetry": {"message_id": "msg-05-p5-04", "site_id": "garage-demo-b1", "vehicle_id": "p5-04", "source_id": "scenario-fleet-rainstorm-v1", "captured_at": "2026-07-23T08:04:00+00:00", "environment": {"rainfall_mm_h": 102, "water_level_cm": 14, "secondary_water_level_cm": 14, "rise_rate_cm_min": 1, "sensor_confidence": 0.91}, "vehicle": {"occupants_clear": true, "charging_disconnected": true, "vehicle_healthy": true, "positioning_online": true, "network_online": true, "emergency_operator_online": true, "water_contact_triggered": false, "motion_state": "PARKED"}, "site": {"route_dry": false, "route_blocked": false}}, "danger_water_level_cm": null, "route_distance_m": null},
+          {"telemetry": {"message_id": "msg-05-p5-05", "site_id": "garage-demo-b1", "vehicle_id": "p5-05", "source_id": "scenario-fleet-rainstorm-v1", "captured_at": "2026-07-23T08:04:00+00:00", "environment": {"rainfall_mm_h": 102, "water_level_cm": 14, "secondary_water_level_cm": 14, "rise_rate_cm_min": 1, "sensor_confidence": 0.91}, "vehicle": {"occupants_clear": true, "charging_disconnected": true, "vehicle_healthy": true, "positioning_online": true, "network_online": true, "emergency_operator_online": true, "water_contact_triggered": false, "motion_state": "PARKED"}, "site": {"route_dry": true, "route_blocked": false}}, "danger_water_level_cm": null, "route_distance_m": null},
+          {"telemetry": {"message_id": "msg-05-p5-06", "site_id": "garage-demo-b1", "vehicle_id": "p5-06", "source_id": "scenario-fleet-rainstorm-v1", "captured_at": "2026-07-23T08:04:00+00:00", "environment": {"rainfall_mm_h": 102, "water_level_cm": 14, "secondary_water_level_cm": 14, "rise_rate_cm_min": 1, "sensor_confidence": 0.91}, "vehicle": {"occupants_clear": true, "charging_disconnected": true, "vehicle_healthy": true, "positioning_online": true, "network_online": true, "emergency_operator_online": true, "water_contact_triggered": false, "motion_state": "PARKED"}, "site": {"route_dry": true, "route_blocked": false}}, "danger_water_level_cm": null, "route_distance_m": null}
+        ]
+      },
+      "expect": {
+        "summary": {"vehicle_count": 6, "scheduled_count": 1, "verify_count": 1, "denied_count": 4, "remaining_capacity": 0},
+        "vehicles": [
+          {"vehicle_id": "p5-01", "decision": "MIGRATE_NOW", "allocation_status": "SCHEDULED_SHADOW", "rank": 1, "batch_index": 1, "queue_ahead": 0, "safe_point_id": "high-a", "action_permission": "SHADOW_ONLY", "authorized_to_move": false},
+          {"vehicle_id": "p5-02", "decision": "MIGRATE_NOW", "allocation_status": "NO_CAPACITY", "rank": 2, "batch_index": null, "queue_ahead": null, "safe_point_id": null, "action_permission": "DENIED", "authorized_to_move": false},
+          {"vehicle_id": "p5-05", "decision": "MIGRATE_NOW", "allocation_status": "NO_CAPACITY", "rank": 3, "batch_index": null, "queue_ahead": null, "safe_point_id": null, "action_permission": "DENIED", "authorized_to_move": false},
+          {"vehicle_id": "p5-06", "decision": "MIGRATE_NOW", "allocation_status": "NO_CAPACITY", "rank": 4, "batch_index": null, "queue_ahead": null, "safe_point_id": null, "action_permission": "DENIED", "authorized_to_move": false},
+          {"vehicle_id": "p5-03", "decision": "VERIFY_ONLY", "allocation_status": "VERIFY_ONLY", "rank": null, "batch_index": null, "queue_ahead": null, "safe_point_id": null, "action_permission": "NONE", "authorized_to_move": false},
+          {"vehicle_id": "p5-04", "decision": "NO_GO", "allocation_status": "DENIED", "rank": null, "batch_index": null, "queue_ahead": null, "safe_point_id": null, "action_permission": "DENIED", "authorized_to_move": false}
+        ]
+      }
+    },
+    {
+      "stage_id": "06-window-closed",
+      "label": "窗口关闭",
+      "snapshot": {
+        "snapshot_id": "fleet-stage-06", "site_id": "garage-demo-b1", "captured_at": "2026-07-23T08:05:00+00:00", "source_mode": "SIMULATED",
+        "site": {"observed_at": "2026-07-23T08:05:00+00:00", "gateway_online": true, "batch_size": 1, "batch_interval_min": 7, "safe_points": [{"safe_point_id": "high-a", "label": "高位 A", "priority": 1, "capacity": 1, "available": true}, {"safe_point_id": "high-b", "label": "高位 B", "priority": 2, "capacity": 1, "available": true}]},
+        "vehicles": [
+          {"telemetry": {"message_id": "msg-06-p5-01", "site_id": "garage-demo-b1", "vehicle_id": "p5-01", "source_id": "scenario-fleet-rainstorm-v1", "captured_at": "2026-07-23T08:05:00+00:00", "environment": {"rainfall_mm_h": 108, "water_level_cm": 10, "secondary_water_level_cm": 10, "rise_rate_cm_min": 1, "sensor_confidence": 0.91}, "vehicle": {"occupants_clear": true, "charging_disconnected": true, "vehicle_healthy": true, "positioning_online": true, "network_online": true, "emergency_operator_online": true, "water_contact_triggered": false, "motion_state": "PARKED"}, "site": {"route_dry": true, "route_blocked": false}}, "danger_water_level_cm": null, "route_distance_m": null},
+          {"telemetry": {"message_id": "msg-06-p5-02", "site_id": "garage-demo-b1", "vehicle_id": "p5-02", "source_id": "scenario-fleet-rainstorm-v1", "captured_at": "2026-07-23T08:05:00+00:00", "environment": {"rainfall_mm_h": 108, "water_level_cm": 10, "secondary_water_level_cm": 10, "rise_rate_cm_min": 1, "sensor_confidence": 0.91}, "vehicle": {"occupants_clear": true, "charging_disconnected": true, "vehicle_healthy": true, "positioning_online": true, "network_online": true, "emergency_operator_online": true, "water_contact_triggered": false, "motion_state": "PARKED"}, "site": {"route_dry": true, "route_blocked": false}}, "danger_water_level_cm": null, "route_distance_m": null},
+          {"telemetry": {"message_id": "msg-06-p5-03", "site_id": "garage-demo-b1", "vehicle_id": "p5-03", "source_id": "scenario-fleet-rainstorm-v1", "captured_at": "2026-07-23T08:05:00+00:00", "environment": {"rainfall_mm_h": 108, "water_level_cm": 10, "secondary_water_level_cm": 10, "rise_rate_cm_min": 1, "sensor_confidence": 0.55}, "vehicle": {"occupants_clear": true, "charging_disconnected": true, "vehicle_healthy": true, "positioning_online": true, "network_online": true, "emergency_operator_online": true, "water_contact_triggered": false, "motion_state": "PARKED"}, "site": {"route_dry": true, "route_blocked": false}}, "danger_water_level_cm": null, "route_distance_m": null},
+          {"telemetry": {"message_id": "msg-06-p5-04", "site_id": "garage-demo-b1", "vehicle_id": "p5-04", "source_id": "scenario-fleet-rainstorm-v1", "captured_at": "2026-07-23T08:05:00+00:00", "environment": {"rainfall_mm_h": 108, "water_level_cm": 10, "secondary_water_level_cm": 10, "rise_rate_cm_min": 1, "sensor_confidence": 0.91}, "vehicle": {"occupants_clear": true, "charging_disconnected": true, "vehicle_healthy": true, "positioning_online": true, "network_online": true, "emergency_operator_online": true, "water_contact_triggered": false, "motion_state": "PARKED"}, "site": {"route_dry": false, "route_blocked": false}}, "danger_water_level_cm": null, "route_distance_m": null},
+          {"telemetry": {"message_id": "msg-06-p5-05", "site_id": "garage-demo-b1", "vehicle_id": "p5-05", "source_id": "scenario-fleet-rainstorm-v1", "captured_at": "2026-07-23T08:05:00+00:00", "environment": {"rainfall_mm_h": 108, "water_level_cm": 10, "secondary_water_level_cm": 10, "rise_rate_cm_min": 1, "sensor_confidence": 0.91}, "vehicle": {"occupants_clear": true, "charging_disconnected": true, "vehicle_healthy": true, "positioning_online": true, "network_online": true, "emergency_operator_online": true, "water_contact_triggered": false, "motion_state": "PARKED"}, "site": {"route_dry": true, "route_blocked": false}}, "danger_water_level_cm": null, "route_distance_m": null},
+          {"telemetry": {"message_id": "msg-06-p5-06", "site_id": "garage-demo-b1", "vehicle_id": "p5-06", "source_id": "scenario-fleet-rainstorm-v1", "captured_at": "2026-07-23T08:05:00+00:00", "environment": {"rainfall_mm_h": 108, "water_level_cm": 10, "secondary_water_level_cm": 10, "rise_rate_cm_min": 1, "sensor_confidence": 0.91}, "vehicle": {"occupants_clear": true, "charging_disconnected": true, "vehicle_healthy": true, "positioning_online": true, "network_online": true, "emergency_operator_online": true, "water_contact_triggered": false, "motion_state": "PARKED"}, "site": {"route_dry": true, "route_blocked": false}}, "danger_water_level_cm": null, "route_distance_m": null}
+        ]
+      },
+      "expect": {
+        "summary": {"vehicle_count": 6, "scheduled_count": 1, "verify_count": 1, "denied_count": 4, "remaining_capacity": 1},
+        "vehicles": [
+          {"vehicle_id": "p5-01", "decision": "MIGRATE_NOW", "allocation_status": "SCHEDULED_SHADOW", "rank": 1, "batch_index": 1, "queue_ahead": 0, "safe_point_id": "high-a", "action_permission": "SHADOW_ONLY", "authorized_to_move": false},
+          {"vehicle_id": "p5-02", "decision": "MIGRATE_NOW", "allocation_status": "WINDOW_CLOSED", "rank": 2, "batch_index": 2, "queue_ahead": 1, "safe_point_id": null, "action_permission": "DENIED", "authorized_to_move": false},
+          {"vehicle_id": "p5-05", "decision": "MIGRATE_NOW", "allocation_status": "NO_CAPACITY", "rank": 3, "batch_index": null, "queue_ahead": null, "safe_point_id": null, "action_permission": "DENIED", "authorized_to_move": false},
+          {"vehicle_id": "p5-06", "decision": "MIGRATE_NOW", "allocation_status": "NO_CAPACITY", "rank": 4, "batch_index": null, "queue_ahead": null, "safe_point_id": null, "action_permission": "DENIED", "authorized_to_move": false},
+          {"vehicle_id": "p5-03", "decision": "VERIFY_ONLY", "allocation_status": "VERIFY_ONLY", "rank": null, "batch_index": null, "queue_ahead": null, "safe_point_id": null, "action_permission": "NONE", "authorized_to_move": false},
+          {"vehicle_id": "p5-04", "decision": "NO_GO", "allocation_status": "DENIED", "rank": null, "batch_index": null, "queue_ahead": null, "safe_point_id": null, "action_permission": "DENIED", "authorized_to_move": false}
+        ]
+      }
+    }
+  ]
+}

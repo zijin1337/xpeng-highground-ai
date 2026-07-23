@@ -487,6 +487,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app.mount("/src", StaticFiles(directory=REPO_ROOT / "src"), name="src")
     app.mount("/assets", StaticFiles(directory=REPO_ROOT / "assets"), name="assets")
+    app.mount("/demo", StaticFiles(directory=REPO_ROOT / "demo"), name="demo")
 
     @app.get("/", include_in_schema=False)
     def index() -> FileResponse:
