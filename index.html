@@ -30,6 +30,167 @@
   </header>
 
   <main id="main">
+    <div class="view-tabs" role="tablist" aria-label="控制台视图">
+      <button id="view-fleet-tab" class="view-tab" type="button" role="tab" aria-selected="true" aria-controls="fleet-shadow-view">
+        车队影子演练
+      </button>
+      <button id="view-single-tab" class="view-tab" type="button" role="tab" aria-selected="false" aria-controls="single-car-view" tabindex="-1">
+        单车控制台
+      </button>
+    </div>
+
+    <section id="fleet-shadow-view" class="fleet-view" role="tabpanel" aria-labelledby="view-fleet-tab">
+      <header class="fleet-heading">
+        <div>
+          <p class="section-kicker">B1 北区 · 六车固定演练</p>
+          <h2>车队暴雨影子调度</h2>
+          <p id="fleet-stage-label" class="fleet-stage-label">正在加载场景</p>
+        </div>
+        <span id="fleet-source-label" class="fleet-source-label" role="status" aria-live="polite">
+          SIMULATED · 浏览器规划 · 不写 SQLite
+        </span>
+      </header>
+
+      <section class="fleet-summary" aria-label="车队规划摘要">
+        <div><span>车辆总数</span><strong id="fleet-vehicle-count">--</strong><small>本次快照</small></div>
+        <div><span>影子调度</span><strong id="fleet-scheduled-count">--</strong><small>无执行权限</small></div>
+        <div><span>等待复核</span><strong id="fleet-verify-count">--</strong><small>证据不足</small></div>
+        <div><span>正确禁行</span><strong id="fleet-denied-count">--</strong><small>容量或安全拒绝</small></div>
+        <div><span>剩余容量</span><strong id="fleet-capacity-count">--</strong><small>高位安全点</small></div>
+      </section>
+
+      <section class="fleet-operations" aria-label="车队态势、调度队列与证据连接">
+        <section class="fleet-map-panel" aria-labelledby="fleet-map-title">
+          <div class="section-heading compact">
+            <div>
+              <p class="panel-label">数字孪生 · 非实车状态</p>
+              <h3 id="fleet-map-title">B1 风险区与高位点</h3>
+            </div>
+            <span class="map-legend"><i aria-hidden="true"></i> 建议路线</span>
+          </div>
+          <svg id="fleet-map" viewBox="0 0 900 480" role="img" aria-label="车队数字孪生风险图，非实车状态">
+            <defs>
+              <pattern id="fleet-grid" width="45" height="45" patternUnits="userSpaceOnUse">
+                <path d="M45 0H0V45" fill="none" stroke="#d8dfdc" stroke-width="1"/>
+              </pattern>
+            </defs>
+            <rect width="900" height="480" class="fleet-map-ground"/>
+            <rect width="900" height="480" fill="url(#fleet-grid)" opacity=".62"/>
+            <path d="M0 375H548L735 235H900V480H0Z" class="fleet-map-ramp"/>
+            <path d="M0 375H548L735 235H900" class="fleet-map-edge"/>
+
+            <g class="fleet-water-zone" aria-hidden="true">
+              <path d="M0 335C135 315 248 352 390 330C463 319 513 324 575 339V480H0Z"/>
+              <text x="36" y="438">低洼积水风险区</text>
+            </g>
+            <g class="fleet-watch-zone" aria-hidden="true">
+              <rect x="405" y="245" width="176" height="82" rx="6"/>
+              <text x="493" y="291" text-anchor="middle">坡道汇流监测区</text>
+            </g>
+
+            <g class="fleet-high-point" aria-hidden="true">
+              <rect x="738" y="78" width="132" height="98" rx="6"/>
+              <path d="M756 151V102H852V151"/>
+              <text x="804" y="130" text-anchor="middle">A</text>
+              <text x="804" y="199" text-anchor="middle">高位点 high-a</text>
+            </g>
+            <g class="fleet-high-point" aria-hidden="true">
+              <rect x="738" y="252" width="132" height="98" rx="6"/>
+              <path d="M756 325V276H852V325"/>
+              <text x="804" y="304" text-anchor="middle">B</text>
+              <text x="804" y="373" text-anchor="middle">高位点 high-b</text>
+            </g>
+
+            <g class="fleet-routes" aria-hidden="true">
+              <path data-route-vehicle="p5-01" d="M105 305C290 286 462 306 610 236C667 209 704 164 756 128"/>
+              <path data-route-vehicle="p5-02" d="M225 305C368 285 492 307 614 270C676 251 710 298 756 300"/>
+              <path data-route-vehicle="p5-03" d="M345 305C465 290 536 273 620 235C678 208 710 164 756 128"/>
+              <path data-route-vehicle="p5-04" d="M105 395C284 379 468 371 610 305C669 278 709 300 756 300"/>
+              <path data-route-vehicle="p5-05" d="M225 395C370 379 503 355 620 270C676 229 714 164 756 128"/>
+              <path data-route-vehicle="p5-06" d="M345 395C470 380 547 348 627 306C679 279 716 300 756 300"/>
+            </g>
+
+            <g class="fleet-vehicle-marker" data-vehicle-id="p5-01" role="button" tabindex="0" aria-label="选择车辆 p5-01" aria-selected="false" transform="translate(105 305)">
+              <rect x="-42" y="-23" width="84" height="46" rx="5"/><path d="M-27-2L-13-15H15L29-2Z"/><circle cx="-25" cy="23" r="8"/><circle cx="25" cy="23" r="8"/><text y="6" text-anchor="middle">01</text>
+            </g>
+            <g class="fleet-vehicle-marker" data-vehicle-id="p5-02" role="button" tabindex="0" aria-label="选择车辆 p5-02" aria-selected="false" transform="translate(225 305)">
+              <rect x="-42" y="-23" width="84" height="46" rx="5"/><path d="M-27-2L-13-15H15L29-2Z"/><circle cx="-25" cy="23" r="8"/><circle cx="25" cy="23" r="8"/><text y="6" text-anchor="middle">02</text>
+            </g>
+            <g class="fleet-vehicle-marker" data-vehicle-id="p5-03" role="button" tabindex="0" aria-label="选择车辆 p5-03" aria-selected="false" transform="translate(345 305)">
+              <rect x="-42" y="-23" width="84" height="46" rx="5"/><path d="M-27-2L-13-15H15L29-2Z"/><circle cx="-25" cy="23" r="8"/><circle cx="25" cy="23" r="8"/><text y="6" text-anchor="middle">03</text>
+            </g>
+            <g class="fleet-vehicle-marker" data-vehicle-id="p5-04" role="button" tabindex="0" aria-label="选择车辆 p5-04" aria-selected="false" transform="translate(105 395)">
+              <rect x="-42" y="-23" width="84" height="46" rx="5"/><path d="M-27-2L-13-15H15L29-2Z"/><circle cx="-25" cy="23" r="8"/><circle cx="25" cy="23" r="8"/><text y="6" text-anchor="middle">04</text>
+            </g>
+            <g class="fleet-vehicle-marker" data-vehicle-id="p5-05" role="button" tabindex="0" aria-label="选择车辆 p5-05" aria-selected="false" transform="translate(225 395)">
+              <rect x="-42" y="-23" width="84" height="46" rx="5"/><path d="M-27-2L-13-15H15L29-2Z"/><circle cx="-25" cy="23" r="8"/><circle cx="25" cy="23" r="8"/><text y="6" text-anchor="middle">05</text>
+            </g>
+            <g class="fleet-vehicle-marker" data-vehicle-id="p5-06" role="button" tabindex="0" aria-label="选择车辆 p5-06" aria-selected="false" transform="translate(345 395)">
+              <rect x="-42" y="-23" width="84" height="46" rx="5"/><path d="M-27-2L-13-15H15L29-2Z"/><circle cx="-25" cy="23" r="8"/><circle cx="25" cy="23" r="8"/><text y="6" text-anchor="middle">06</text>
+            </g>
+          </svg>
+        </section>
+
+        <section class="fleet-queue-panel" aria-labelledby="fleet-queue-title">
+          <div class="section-heading compact">
+            <div><p class="panel-label">确定性排序</p><h3 id="fleet-queue-title">影子调度队列</h3></div>
+            <span class="queue-note">点击车辆筛选证据</span>
+          </div>
+          <div class="fleet-table-wrap fleet-queue-wrap">
+            <table class="fleet-queue-table">
+              <thead><tr><th>序</th><th>车辆 / 窗口</th><th>批次 / 安全点</th><th>状态</th></tr></thead>
+              <tbody id="fleet-queue-body"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <aside class="fleet-api-panel" aria-labelledby="fleet-api-title">
+          <div class="section-heading compact">
+            <div><p class="panel-label">可追溯证据</p><h3 id="fleet-api-title">SQLite 连接</h3></div>
+          </div>
+          <div class="fleet-api-state" role="status" aria-live="polite" aria-atomic="true">
+            <span aria-hidden="true"></span>
+            <strong id="fleet-api-status">浏览器规划模式</strong>
+          </div>
+          <label for="fleet-api-key-input">后端 X-API-Key</label>
+          <input id="fleet-api-key-input" type="password" autocomplete="off" placeholder="输入 API Key">
+          <button id="fleet-api-connect-button" class="button" type="button">连接 SQLite 证据</button>
+          <p>连接后自动提交当前阶段。影子计划始终不签发车辆移动权限。</p>
+        </aside>
+      </section>
+
+      <section class="fleet-replay" aria-labelledby="fleet-replay-title">
+        <div class="fleet-replay-heading">
+          <div><p class="panel-label">固定事件回放</p><h3 id="fleet-replay-title">六阶段暴雨演练</h3></div>
+          <div class="fleet-replay-actions">
+            <button id="fleet-reset-button" class="button" type="button"><span aria-hidden="true">↺</span> 重置</button>
+            <button id="fleet-next-button" class="button button-primary" type="button">推进下一阶段 <span aria-hidden="true">→</span></button>
+          </div>
+        </div>
+        <ol id="fleet-timeline" class="fleet-timeline" aria-label="选择演练阶段"></ol>
+      </section>
+
+      <section class="fleet-evidence" aria-labelledby="fleet-evidence-title">
+        <div class="section-heading compact">
+          <div><p class="panel-label">逐车证据</p><h3 id="fleet-evidence-title">决策、分配与拒绝依据</h3></div>
+          <button id="fleet-filter-clear" class="text-button" type="button" hidden>显示全部车辆</button>
+        </div>
+        <div class="fleet-table-wrap">
+          <table class="fleet-evidence-table">
+            <thead><tr><th>车辆</th><th>基础决策</th><th>车队分配</th><th>安全窗口</th><th>关键依据</th><th>动作权限</th></tr></thead>
+            <tbody id="fleet-evidence-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="fleet-audit" aria-label="车队运行审计证据" aria-live="polite">
+        <div><span>运行 ID</span><code id="fleet-run-id">—</code></div>
+        <div><span>输入 SHA-256</span><code id="fleet-input-hash">—</code></div>
+        <div><span>计划 SHA-256</span><code id="fleet-plan-hash">—</code></div>
+      </section>
+    </section>
+
+    <div id="single-car-view" role="tabpanel" aria-labelledby="view-single-tab" hidden>
     <section class="console-heading" aria-labelledby="console-title">
       <div>
         <p class="section-kicker">B1 北区 · 演示场景</p>
@@ -264,6 +425,7 @@
         </div>
       </section>
     </section>
+    </div>
   </main>
 
   <footer>
@@ -272,5 +434,6 @@
   </footer>
 
   <script type="module" src="./src/app.js"></script>
+  <script type="module" src="./src/fleet-view.js"></script>
 </body>
 </html>

@@ -63,6 +63,32 @@ REQUIRED_IDS = {
     "command-button",
 }
 
+FLEET_REQUIRED_IDS = {
+    "view-fleet-tab",
+    "view-single-tab",
+    "fleet-shadow-view",
+    "single-car-view",
+    "fleet-source-label",
+    "fleet-stage-label",
+    "fleet-vehicle-count",
+    "fleet-scheduled-count",
+    "fleet-verify-count",
+    "fleet-denied-count",
+    "fleet-capacity-count",
+    "fleet-map",
+    "fleet-queue-body",
+    "fleet-timeline",
+    "fleet-evidence-body",
+    "fleet-next-button",
+    "fleet-reset-button",
+    "fleet-api-key-input",
+    "fleet-api-connect-button",
+    "fleet-api-status",
+    "fleet-run-id",
+    "fleet-input-hash",
+    "fleet-plan-hash",
+}
+
 SCENARIOS = {"normal", "rising", "conflict", "blocked", "occupant", "movingFault"}
 FORM_INPUTS = {
     "rainfall",
@@ -94,6 +120,8 @@ class ContractParser(HTMLParser):
         self.pipeline_items = 0
         self.api_status_scoped = False
         self.evidence_body_tag: str | None = None
+        self.fleet_view_hidden: bool | None = None
+        self.single_car_hidden: bool | None = None
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         values = dict(attrs)
@@ -114,6 +142,10 @@ class ContractParser(HTMLParser):
             self.api_status_scoped = any("api-state" in item["classes"] for item in ancestors)
         if element_id == "evidence-body":
             self.evidence_body_tag = tag
+        if element_id == "fleet-shadow-view":
+            self.fleet_view_hidden = "hidden" in values
+        if element_id == "single-car-view":
+            self.single_car_hidden = "hidden" in values
         if tag not in self.VOID_ELEMENTS:
             self.stack.append({"tag": tag, "id": element_id, "classes": classes})
 
@@ -134,10 +166,12 @@ def test_web_console_keeps_runtime_dom_contract() -> None:
     parser = parse_console()
     counts = Counter(parser.ids)
 
-    assert REQUIRED_IDS <= counts.keys()
+    assert REQUIRED_IDS | FLEET_REQUIRED_IDS <= counts.keys()
     assert not {element_id for element_id, count in counts.items() if count > 1}
     assert parser.form_inputs == FORM_INPUTS
     assert parser.scenarios == SCENARIOS
     assert parser.pipeline_items == 5
     assert parser.api_status_scoped
     assert parser.evidence_body_tag == "tbody"
+    assert parser.fleet_view_hidden is False
+    assert parser.single_car_hidden is True

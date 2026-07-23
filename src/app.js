@@ -439,6 +439,12 @@ function setApiStatus(state, text) {
       : "正在连接本地后端";
 }
 
+function dispatchApiSession(connected) {
+  window.dispatchEvent(new CustomEvent("highground:api-session", {
+    detail: { connected: Boolean(connected) },
+  }));
+}
+
 function responseDetail(text) {
   try {
     const payload = JSON.parse(text);
@@ -500,6 +506,7 @@ function disconnectApi(statusText) {
   invalidatePendingTelemetry();
   setApiStatus("error", statusText);
   updateCommandAvailability();
+  dispatchApiSession(false);
 }
 
 function setConnectionPending(pending) {
@@ -545,6 +552,7 @@ async function connectApi() {
     setApiStatus("connected", `API 已连接 · ${storageLabel}`);
     el["api-connect-button"].textContent = "重新连接";
     updateCommandAvailability();
+    dispatchApiSession(true);
   } catch (error) {
     if (!connectionResponseCanCommit(
       requestGeneration,
