@@ -2,7 +2,7 @@
 
 面向地下车库暴雨内涝的可运行安全决策原型：默认首页可回放六车 Fleet Shadow 演练，场端 API 可接收遥测、计算 Go / No-Go 并保存 SQLite 证据；P5 车端提供只读状态和座舱提醒。
 
-![高地 AI 暴雨风险控制台](./assets/highground-demo.png)
+![Fleet Shadow 六车暴雨影子调度仪表盘](./assets/fleet-shadow-dashboard-v1-3.png)
 
 > 重要边界：后端、数据库、API、授权和命令留痕均可在本地运行；默认车辆适配器为 `record-only`，不会向任何真实车辆发送控制指令。Fleet Shadow 请求不接受车主授权字段，也不进入命令或执行器链路。接入实车必须取得制造商官方 SDK/API、车辆授权、封闭场地许可，并完成独立安全壳和功能安全验证。本仓库不伪造小鹏车辆控制接口，也未验证真实 P5、停车场、传感器或训练模型。
 
