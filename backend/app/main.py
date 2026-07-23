@@ -5,6 +5,8 @@ import hmac
 import secrets
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
+from uuid import uuid4
+
 from fastapi import FastAPI, HTTPException, Query, Response, Security, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -16,10 +18,13 @@ from .config import REPO_ROOT, Settings
 from .database import (
     Database,
     EventSupersededError,
+    FleetSnapshotConflictError,
     MessageIdConflictError,
     StoredEvent,
 )
 from .decision_engine import evaluate_decision
+from .fleet_models import FleetPlan, FleetSnapshot
+from .fleet_planner import plan_fleet
 from .models import (
     AuthorizationRequest,
     AuthorizationResponse,
@@ -98,6 +103,44 @@ def _capture_time_error(
     if age_seconds < -settings.capture_future_tolerance_seconds:
         return (
             "captured_at is ahead of server time beyond the configured tolerance "
+            f"({settings.capture_future_tolerance_seconds}s)"
+        )
+    return None
+
+
+def _fleet_capture_time_error(
+    payload: FleetSnapshot,
+    settings: Settings,
+    *,
+    now: datetime,
+) -> str | None:
+    captures = [
+        ("captured_at", payload.captured_at),
+        *[
+            (
+                f"vehicles[{item.telemetry.vehicle_id}].telemetry.captured_at",
+                item.telemetry.captured_at,
+            )
+            for item in payload.vehicles
+        ],
+    ]
+    for path, captured_at in captures:
+        age_seconds = (now - captured_at).total_seconds()
+        if age_seconds > settings.capture_max_age_seconds:
+            return (
+                f"{path} is older than the configured maximum age "
+                f"({settings.capture_max_age_seconds}s)"
+            )
+        if age_seconds < -settings.capture_future_tolerance_seconds:
+            return (
+                f"{path} is ahead of server time beyond the configured tolerance "
+                f"({settings.capture_future_tolerance_seconds}s)"
+            )
+
+    site_age_seconds = (now - payload.site.observed_at).total_seconds()
+    if site_age_seconds < -settings.capture_future_tolerance_seconds:
+        return (
+            "site.observed_at is ahead of server time beyond the configured tolerance "
             f"({settings.capture_future_tolerance_seconds}s)"
         )
     return None
@@ -195,6 +238,81 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if event.duplicate:
             response.status_code = status.HTTP_200_OK
         return _event_response(event)
+
+    @app.post(
+        f"{API_PREFIX}/fleet/shadow-runs",
+        response_model=FleetPlan,
+        status_code=status.HTTP_201_CREATED,
+        tags=["fleet-shadow"],
+    )
+    def create_fleet_shadow_run(
+        payload: FleetSnapshot,
+        response: Response,
+        _: str = Security(require_api_key),
+    ) -> FleetPlan:
+        now = _utc_now()
+        capture_error = _fleet_capture_time_error(payload, settings, now=now)
+        if capture_error and not database.has_fleet_snapshot_id(payload.snapshot_id):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=capture_error,
+            )
+        plan = plan_fleet(
+            payload,
+            settings.policy,
+            run_id=f"fleet_{uuid4().hex}",
+            created_at=now,
+            now=now,
+            site_max_age_seconds=settings.capture_max_age_seconds,
+        )
+        try:
+            stored = database.save_fleet_run(payload, plan)
+        except FleetSnapshotConflictError as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+        if stored.duplicate:
+            response.status_code = status.HTTP_200_OK
+        return stored.plan
+
+    @app.get(
+        f"{API_PREFIX}/fleet/shadow-runs/{{run_id}}",
+        response_model=FleetPlan,
+        tags=["fleet-shadow"],
+    )
+    def get_fleet_shadow_run(
+        run_id: str,
+        _: str = Security(require_api_key),
+    ) -> FleetPlan:
+        stored = database.get_fleet_run(run_id)
+        if not stored:
+            raise HTTPException(status_code=404, detail="Fleet shadow run not found")
+        return stored.plan
+
+    @app.get(
+        f"{API_PREFIX}/fleet/latest",
+        response_model=FleetPlan,
+        tags=["fleet-shadow"],
+    )
+    def get_latest_fleet_shadow_run(
+        response: Response,
+        site_id: str = Query(min_length=1, max_length=80),
+        _: str = Security(require_api_key),
+    ) -> FleetPlan:
+        stored = database.get_latest_fleet_run(site_id)
+        if not stored:
+            raise HTTPException(
+                status_code=404,
+                detail="No fleet shadow run found",
+                headers=LATEST_RESPONSE_HEADERS,
+            )
+        age_seconds = (_utc_now() - stored.received_at).total_seconds()
+        if age_seconds > settings.event_max_age_seconds:
+            raise HTTPException(
+                status_code=status.HTTP_410_GONE,
+                detail="Latest fleet shadow run is stale; submit a fresh snapshot",
+                headers=LATEST_RESPONSE_HEADERS,
+            )
+        response.headers.update(LATEST_RESPONSE_HEADERS)
+        return stored.plan
 
     @app.get(
         f"{API_PREFIX}/decisions/latest",
